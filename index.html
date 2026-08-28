@@ -310,8 +310,9 @@
 /* =========================================================
    Spesa & Costi — app locale, offline-first (localStorage)
    ========================================================= */
-const APP_VERSION = 'v3.2';
+const APP_VERSION = 'v3.3';
 const CHANGELOG = [
+  {v:'v3.3', note:'Corretto un altro caso in cui l\'app restava con lo schermo vuoto per un paio di secondi all\'avvio offline: ora la schermata Home compare subito, e i dati arrivano subito dopo senza bloccare nulla.'},
   {v:'v3.2', note:'L\'app ora si apre sempre subito, senza aspettare la conferma della rete: se hai già fatto accesso in passato su questo telefono, entra direttamente coi dati salvati e controlla la connessione dopo, in background. Utile quando sei senza campo, es. dentro un supermercato.'},
   {v:'v3.1', note:'Aggiunta la conferma prima di eliminare un articolo dalla lista della spesa (capitava di cancellarlo per sbaglio col cestino). Aggiunto anche un avviso "chi ha aggiunto cosa": la prima volta l\'app chiede il tuo nome, e da quel momento vedrai un avviso in alto quando l\'altra persona aggiunge qualcosa alla lista.'},
   {v:'v3.0', note:'L\'app ora richiede il login ed è condivisa: i dati non sono più solo sul telefono, ma sincronizzati in tempo reale con chiunque acceda con lo stesso account. Funziona comunque offline: le modifiche fatte senza connessione si sincronizzano da sole appena torna il segnale.'},
@@ -469,12 +470,13 @@ function showLoginScreen(){
 }
 async function initApp(){
   updateNetBadge();
+  render(); // mostra subito la schermata Home, senza aspettare il caricamento dei dati
+  ensureDeviceName().then(checkNewActivity);
   await prefetchCache();
   ensureDefaultListaCategorie();
   ensureDefaultCostiCategorie();
-  render();
+  render(); // ridisegna con i dati reali (locali o dal server) appena pronti
   watchAllKeys();
-  ensureDeviceName().then(checkNewActivity);
 }
 
 /* ---------- Identità del dispositivo (locale, NON condivisa) e avviso "chi ha aggiunto cosa" ---------- */
