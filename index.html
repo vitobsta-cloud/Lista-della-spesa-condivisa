@@ -315,8 +315,9 @@
 /* =========================================================
    Spesa & Costi — app locale, offline-first (localStorage)
    ========================================================= */
-const APP_VERSION = 'v3.9';
+const APP_VERSION = 'v4.0';
 const CHANGELOG = [
+  {v:'v4.0', note:'Quando modifichi una spesa nello storico, ora vedi solo quella (le altre restano nascoste finché non chiudi). Aggiunto anche "📷 Scansiona scontrino": scatta o carica una foto dello scontrino e l\'app prova a leggere da sola l\'importo (e la data) e li inserisce nel modulo — controlla sempre che siano corretti prima di salvare. Richiede una connessione internet la prima volta.'},
   {v:'v3.9', note:'Aggiunto il campo "Chi ha fatto la spesa" nello storico: si compila da solo col tuo nome quando chiudi la spesa, e si può cambiare in "Insieme", nel nome dell\'altra persona, o scriverne uno nuovo. Ora compare anche nell\'elenco della cronologia.'},
   {v:'v3.8', note:'Aggiunta la "Cronologia spese" anche come riquadro diretto nella Home, oltre che dentro la lista della spesa. Chiudere la spesa ora è più veloce: c\'è un pulsante "⚡ Chiudi spesa" che chiude subito senza fare domande (utile quando si ha fretta), e uno "📝 Con dettagli" per chi vuole registrare importo, pagamento e supermercato. Le spese chiuse al volo si possono sempre completare più tardi toccandole nella Cronologia.'},
   {v:'v3.7', note:'L\'avviso "chi ha fatto cosa" ora avvisa anche quando l\'altra persona chiude la spesa (anche solo in parte): vedrai un messaggio tipo "Marco ha chiuso la spesa (5 articoli, 12,50€)" la prossima volta che apri l\'app.'},
@@ -1154,29 +1155,94 @@ function renderStoricoSpesa(){
   if(storico.length===0){
     return `<div class="list-spacer"></div><div class="empty">Nessuna spesa chiusa ancora. Quando chiudi la lista della spesa, comparirà qui. 🧾</div>`;
   }
+  if(state.editStoricoId){
+    const s = storico.find(x=>x.id===state.editStoricoId);
+    if(s) return `<div class="list-spacer"></div>` + renderStoricoEditForm(s);
+    state.editStoricoId = null; // la spesa non esiste più: mostra l'elenco normale sotto
+  }
   let html = `<div class="list-spacer"></div>`;
   storico.forEach(s=>{
-    if(state.editStoricoId === s.id){
-      html += renderStoricoEditForm(s);
-    } else {
-      const importoTxt = s.importo!=null ? euro(s.importo) : '—';
-      const dettPezzi = [];
-      if(s.autore) dettPezzi.push(`👤 ${escapeHtml(s.autore)}`);
-      dettPezzi.push(`${s.articoli} articoli`);
-      if(s.supermercato) dettPezzi.push(`🏬 ${escapeHtml(s.supermercato)}`);
-      dettPezzi.push(s.importo!=null ? `${pagamentoIcona(s.pagamento)} ${escapeHtml(s.pagamento||'Contanti')}` : 'importo non registrato');
-      const dettaglio = dettPezzi.join(' · ');
-      html += `<div class="card" style="cursor:pointer; display:flex; align-items:center; gap:12px; padding:14px 16px;" onclick="state.editStoricoId='${s.id}'; render();">
-        <div style="flex:1; min-width:0;">
-          <div style="font-weight:800; font-size:14.5px;">${formatDataIt(s.data)}</div>
-          <div style="font-size:12.5px; color:var(--muted); margin-top:2px;">${dettaglio}</div>
-        </div>
-        <div style="font-weight:800; font-size:16px; color:${s.importo!=null?'var(--text)':'var(--muted)'}; white-space:nowrap;">${importoTxt}</div>
-        <span class="chev">›</span>
-      </div>`;
-    }
+    const importoTxt = s.importo!=null ? euro(s.importo) : '—';
+    const dettPezzi = [];
+    if(s.autore) dettPezzi.push(`👤 ${escapeHtml(s.autore)}`);
+    dettPezzi.push(`${s.articoli} articoli`);
+    if(s.supermercato) dettPezzi.push(`🏬 ${escapeHtml(s.supermercato)}`);
+    dettPezzi.push(s.importo!=null ? `${pagamentoIcona(s.pagamento)} ${escapeHtml(s.pagamento||'Contanti')}` : 'importo non registrato');
+    const dettaglio = dettPezzi.join(' · ');
+    html += `<div class="card" style="cursor:pointer; display:flex; align-items:center; gap:12px; padding:14px 16px;" onclick="state.editStoricoId='${s.id}'; render();">
+      <div style="flex:1; min-width:0;">
+        <div style="font-weight:800; font-size:14.5px;">${formatDataIt(s.data)}</div>
+        <div style="font-size:12.5px; color:var(--muted); margin-top:2px;">${dettaglio}</div>
+      </div>
+      <div style="font-weight:800; font-size:16px; color:${s.importo!=null?'var(--text)':'var(--muted)'}; white-space:nowrap;">${importoTxt}</div>
+      <span class="chev">›</span>
+    </div>`;
   });
   return html;
+}
+/* ---------- Scansione scontrino (lettura automatica di importo e data da una foto) ---------- */
+function loadTesseract(){
+  return new Promise((resolve, reject)=>{
+    if(window.Tesseract){ resolve(); return; }
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Impossibile caricare il lettore di scontrini (serve una connessione internet la prima volta).'));
+    document.head.appendChild(script);
+  });
+}
+function estraiImportoDaTesto(testo){
+  const righe = testo.split('\n').map(r=>r.trim()).filter(Boolean);
+  const parolaChiave = /(totale|tot\.?|importo|da pagare)/i;
+  const candidati = [];
+  righe.forEach(riga=>{
+    const numeri = riga.match(/\d{1,4}[.,]\d{2}/g);
+    if(numeri){
+      numeri.forEach(n=>{
+        const val = parseFloat(n.replace(',', '.'));
+        if(!isNaN(val) && val>0 && val<10000) candidati.push({val, conChiave: parolaChiave.test(riga)});
+      });
+    }
+  });
+  if(candidati.length===0) return null;
+  const conChiave = candidati.filter(c=>c.conChiave);
+  const pool = conChiave.length>0 ? conChiave : candidati;
+  return Math.max(...pool.map(c=>c.val));
+}
+function estraiDataDaTesto(testo){
+  const m = testo.match(/(\d{2})[\/\-.](\d{2})[\/\-.](\d{4})/);
+  if(!m) return null;
+  const [, gg, mm, aaaa] = m;
+  return `${aaaa}-${mm}-${gg}`;
+}
+async function scansionaScontrino(id, inputEl){
+  const file = inputEl.files && inputEl.files[0];
+  if(!file) return;
+  const statusEl = document.getElementById('st_ocr_status_'+id);
+  if(statusEl) statusEl.textContent = '⏳ Lettura dello scontrino in corso...';
+  try{
+    await loadTesseract();
+    const risultato = await Tesseract.recognize(file, 'ita');
+    const testo = (risultato && risultato.data && risultato.data.text) || '';
+    const importoTrovato = estraiImportoDaTesto(testo);
+    const dataTrovata = estraiDataDaTesto(testo);
+    if(importoTrovato != null){
+      const importoEl = document.getElementById('st_importo_'+id);
+      if(importoEl) importoEl.value = importoTrovato;
+    }
+    if(dataTrovata){
+      const dataEl = document.getElementById('st_data_'+id);
+      if(dataEl) dataEl.value = dataTrovata;
+    }
+    if(statusEl){
+      statusEl.textContent = importoTrovato != null
+        ? `✅ Importo letto dallo scontrino: ${euro(importoTrovato)}. Controlla che sia giusto prima di salvare.`
+        : '⚠️ Non sono riuscito a leggere un importo. Inseriscilo a mano qui sotto.';
+    }
+  }catch(e){
+    console.error('Scansione scontrino fallita', e);
+    if(statusEl) statusEl.textContent = '⚠️ Lettura non riuscita (' + (e.message||'errore') + '). Inserisci i dati a mano.';
+  }
 }
 async function handleAutoreChange(selectEl){
   if(selectEl.value === '__altro__'){
@@ -1201,6 +1267,10 @@ function renderStoricoEditForm(s){
       <div class="title" style="margin:0;">Modifica spesa</div>
       <button class="del" onclick="state.editStoricoId=null; render();">✕</button>
     </div>
+    <label style="display:none;">Scontrino</label>
+    <input type="file" accept="image/*" capture="environment" id="st_foto_${s.id}" style="display:none;" onchange="scansionaScontrino('${s.id}', this)">
+    <button class="btn accent-soft block" type="button" onclick="document.getElementById('st_foto_${s.id}').click()">📷 Scansiona scontrino</button>
+    <div id="st_ocr_status_${s.id}" style="font-size:12.5px; color:var(--muted); margin:6px 0 14px;"></div>
     <label>Chi ha fatto la spesa</label>
     <select id="st_autore_${s.id}" data-prev="${escapeHtml(s.autore||'')}" onchange="handleAutoreChange(this)">
       <option value="" ${!s.autore?'selected':''}>Non specificato</option>
