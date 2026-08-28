@@ -1,4 +1,4 @@
-const CACHE_NAME = 'spesa-costi-v17';
+const CACHE_NAME = 'spesa-costi-v18';
 const ASSETS = [
   './',
   './index.html',
