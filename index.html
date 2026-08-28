@@ -1,0 +1,1721 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Spesa & Costi</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#e8834a">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root{
+    --bg:#eef1f4; --card:#ffffff; --text:#1c1c1e; --muted:#8a8f98;
+    --border:#e6e8eb; --accent:#e8834a; --ok:#34a366; --danger:#e5484d;
+    --shadow: 0 1px 2px rgba(20,20,30,0.06), 0 1px 1px rgba(20,20,30,0.04);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:var(--bg); color:var(--text); min-height:100vh;
+  }
+  header{
+    padding:16px; background:var(--bg);
+    position:sticky; top:0; z-index:10;
+    display:flex; align-items:center; gap:8px;
+  }
+  header h1{font-size:19px; margin:0; font-weight:700; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .net-badge{
+    flex-shrink:0; font-size:11.5px; font-weight:700; padding:5px 10px; border-radius:20px;
+    display:flex; align-items:center; gap:5px; white-space:nowrap;
+  }
+  .net-badge.online{background:#e3f6ea; color:#1f7a45;}
+  .net-badge.offline{background:#fde3cf; color:#7a4a1a;}
+  .net-badge .dot{width:7px; height:7px; border-radius:50%; background:currentColor;}
+  main{padding:0 16px 110px; max-width:640px; margin:0 auto;}
+
+  .bottom-bar{
+    display:none; flex-direction:row; align-items:center; position:fixed; left:0; right:0; bottom:0; z-index:100;
+    gap:8px; max-width:640px; margin:0 auto;
+    padding:12px 16px calc(12px + env(safe-area-inset-bottom));
+    background:linear-gradient(to top, var(--bg) 78%, transparent);
+  }
+  .bottom-bar.show{display:flex;}
+  #primaryAction{flex:1; min-width:0;}
+  #primaryAction:empty{display:none; flex:0;}
+  #primaryAction .btn{width:100%; margin:0; box-shadow:0 6px 18px rgba(0,0,0,0.18);}
+  .bb-nav-btn{
+    flex-shrink:0;
+    background:#1a1a18; color:#f5f4f0; border:none; border-radius:50px;
+    padding:11px 16px; font-size:13px; font-weight:600; font-family:inherit; cursor:pointer;
+    display:flex; align-items:center; gap:5px; box-shadow:0 4px 14px rgba(0,0,0,0.3);
+    white-space:nowrap; transition:background .15s, transform .08s, opacity .08s;
+  }
+  .bb-nav-btn:active{background:#333; transform:scale(0.96);}
+
+  .list{display:flex; flex-direction:column; gap:12px;}
+  .item{
+    background:var(--card); border-radius:18px; box-shadow:var(--shadow);
+    padding:16px; display:flex; align-items:center; gap:14px; cursor:pointer;
+    border:1px solid transparent;
+  }
+  .item:active{transform:scale(.98);}
+  .item .badge{
+    width:52px; height:52px; border-radius:14px; display:flex; align-items:center; justify-content:center;
+    font-size:24px; flex-shrink:0;
+  }
+  .item .txt{flex:1; min-width:0;}
+  .item .txt .t{font-size:16.5px; font-weight:700; margin-bottom:2px;}
+  .item .txt .s{font-size:13.5px; color:var(--muted);}
+  .item .chev{color:#c4c8cd; font-size:20px; flex-shrink:0;}
+
+  .card{
+    background:var(--card); border-radius:16px; box-shadow:var(--shadow);
+    padding:16px; margin-bottom:12px;
+  }
+  .card .meta{color:var(--muted); font-size:12px; margin-bottom:4px;}
+  .card .title{font-weight:700; font-size:15.5px; margin-bottom:4px;}
+  .card .body{font-size:14px; line-height:1.45; white-space:pre-wrap; color:#3a3d42;}
+  .card .row{display:flex; gap:8px; margin-top:12px;}
+  .card .row > div{min-width:0;}
+  .card .stat-row{display:flex; gap:10px;}
+  .card .stat{flex:1; text-align:center; padding:10px 6px; background:#f6f7f8; border-radius:12px;}
+  .card .stat .n{font-size:19px; font-weight:800;}
+  .card .stat .l{font-size:11.5px; color:var(--muted); margin-top:2px;}
+
+  button{font-family:inherit;}
+  .btn{
+    background:var(--accent); color:#fff; border:none; border-radius:12px;
+    padding:11px 14px; font-size:14.5px; font-weight:700; cursor:pointer;
+    transition: transform .08s, opacity .08s;
+  }
+  .btn:active{transform:scale(0.96); opacity:0.8;}
+  .btn.secondary{background:#f1f2f4; color:var(--text);}
+  .btn.ok{background:var(--ok);}
+  .btn.danger{background:transparent; color:var(--danger); border:1px solid #f3caca; padding:9px 12px; font-size:13.5px;}
+  .btn.small{padding:8px 12px; font-size:13.5px;}
+  .btn.block{width:100%; padding:14px; font-size:15.5px; margin-top:4px;}
+
+  input[type=text], input[type=date], input[type=number], input[type=month], textarea, select{
+    width:100%; background:#f6f7f8; border:1px solid var(--border); color:var(--text);
+    border-radius:12px; padding:12px; font-size:15px; margin-bottom:10px; font-family:inherit;
+  }
+  input[type=number]{ -moz-appearance:textfield; }
+  input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner-spin-button{
+    -webkit-appearance:none; margin:0;
+  }
+  textarea{min-height:80px; resize:vertical;}
+  label{font-size:12.5px; color:var(--muted); display:block; margin-bottom:5px; font-weight:600;}
+
+  .empty{color:var(--muted); text-align:center; padding:36px 10px; font-size:14px;}
+  .checkitem{
+    display:flex; align-items:center; gap:12px; padding:14px;
+    background:var(--card); box-shadow:var(--shadow); border-radius:14px; margin-bottom:8px;
+    cursor:pointer; transition:background .15s, transform .08s; user-select:none;
+  }
+  .checkitem:active{transform:scale(.98);}
+  .checkitem.done{background:#eaf7ee;}
+  .check-circle{
+    width:27px; height:27px; border-radius:50%; border:2px solid #cfd3d8; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:800; color:#fff;
+    transition:background .15s, border-color .15s;
+  }
+  .checkitem.done .check-circle{background:var(--ok); border-color:var(--ok);}
+  .checkitem .label{flex:1; font-size:14.5px; min-width:0;}
+  .checkitem.done .label{text-decoration:line-through; color:var(--muted);}
+  .del{background:none; border:none; color:#c4c8cd; font-size:19px; cursor:pointer; padding:2px 6px; flex-shrink:0;}
+  .edit{background:none; border:none; color:#c4c8cd; font-size:17px; cursor:pointer; padding:2px 6px; flex-shrink:0;}
+  .cc-row{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:11px 14px; background:var(--card); border-bottom:1px solid var(--border);}
+  .cc-row:first-child{border-radius:14px 14px 0 0;}
+  .cc-row:last-child{border-radius:0 0 14px 14px; border-bottom:none;}
+  .cc-row-name{flex:1; font-size:14px; min-width:0;}
+  .cc-row-select{width:auto; max-width:150px; margin-bottom:0; font-size:12.5px; padding:8px 10px;}
+  .ls-cat-icon{font-size:16px; flex-shrink:0; opacity:.85;}
+
+  .list-spacer{height:20px;}
+
+  #catalogoList{margin-top:4px;}
+  .catalogo-row{
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+    padding:11px 6px; border-bottom:1px solid var(--border); cursor:pointer; font-size:14px;
+  }
+  .catalogo-row:active{background:#f6f7f8;}
+  .catalogo-row.selected{background:#eaf7ee;}
+  .catalogo-plus{color:var(--accent); font-weight:800; font-size:16px; flex-shrink:0;}
+  .catalogo-row.selected .catalogo-plus{color:var(--ok); font-size:18px;}
+
+  .sort-toggle{display:flex; gap:8px; margin:4px 0 14px;}
+  .sort-btn{
+    flex:1; background:var(--card); border:1px solid var(--border); color:var(--muted);
+    padding:9px 10px; border-radius:12px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:var(--shadow);
+    transition: transform .08s, opacity .08s;
+  }
+  .sort-btn.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+
+  .period-toggle{display:flex; gap:6px; margin:4px 0 16px; flex-wrap:wrap;}
+  .period-btn{
+    background:var(--card); border:1px solid var(--border); color:var(--muted);
+    padding:8px 12px; border-radius:20px; font-size:12.5px; font-weight:700; cursor:pointer;
+  }
+  .period-btn.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+
+  .chart-wrap{position:relative; height:220px; margin-top:6px;}
+  .chart-title{font-weight:800; font-size:14.5px; margin:22px 0 4px;}
+  .chart-title:first-child{margin-top:4px;}
+
+  .fab-row{display:flex; gap:8px; margin-bottom:14px; margin-top:14px;}
+  .status{font-size:12px; color:var(--muted); text-align:center; margin-top:24px;}
+  .hidden{display:none !important;}
+
+  .cat-header{
+    display:flex; align-items:center; gap:8px; margin:20px 0 10px; padding:8px 14px;
+    border-radius:12px; font-weight:800; font-size:14px; letter-spacing:0.2px;
+  }
+  .cat-header:first-child{margin-top:4px;}
+  .cat-count{font-weight:600; font-size:12px; opacity:0.75;}
+
+  .cat-edit-block{padding:12px 0; border-top:1px solid var(--border);}
+  .cat-edit-block input[type=text]{margin-bottom:8px; font-size:15px;}
+  .cat-edit-row2{display:flex; gap:8px; align-items:center;}
+  .cat-edit-row2 select{flex:1; margin-bottom:0;}
+  .cat-edit-row2 .del{flex-shrink:0; font-size:20px;}
+
+  .chev-btn{background:none; border:none; color:var(--muted); font-size:15px; padding:6px 4px; cursor:pointer; display:flex; align-items:center; gap:4px; font-weight:700;}
+
+  .credits{position:fixed; bottom:10px; right:14px; font-size:11px; color:var(--muted); font-family:monospace; z-index:5; background:rgba(255,255,255,0.85); padding:4px 10px; border-radius:20px; backdrop-filter:blur(4px);}
+
+  .login-screen{position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; padding:20px; z-index:150;}
+  .login-card{background:var(--card); border-radius:20px; box-shadow:var(--shadow); padding:30px 24px; max-width:360px; width:100%;}
+  .login-card h2{margin:0 0 6px; font-size:21px;}
+  .login-card .sub{color:var(--muted); font-size:13.5px; margin:0 0 20px;}
+  .login-error{color:var(--danger); font-size:13px; margin-bottom:10px; display:none; background:#fdeaea; padding:8px 10px; border-radius:8px;}
+
+  .modal-overlay{position:fixed; inset:0; background:rgba(20,20,25,0.5); display:flex; align-items:center; justify-content:center; padding:20px; z-index:200;}
+  .modal-overlay.hidden{display:none;}
+  .modal-box{background:var(--card); border-radius:18px; padding:22px 20px; max-width:340px; width:100%; box-shadow:0 12px 40px rgba(0,0,0,0.3); max-height:80vh; overflow-y:auto;}
+  .modal-message{font-size:15px; line-height:1.5; margin-bottom:20px; color:var(--text); white-space:pre-wrap; text-align:left;}
+  .modal-actions{display:flex; gap:10px; justify-content:flex-end;}
+  .modal-actions .btn{padding:10px 18px; margin:0;}
+
+  /* ---------- Splash screen di avvio (i pezzi del carrello si assemblano) ---------- */
+  #splash{
+    position:fixed; inset:0; z-index:1000; background:var(--bg);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px;
+    transition:opacity .5s ease, visibility .5s ease;
+  }
+  #splash.hide{opacity:0; visibility:hidden; pointer-events:none;}
+  .sp-logo{position:relative; width:112px; height:104px;}
+  .sp-piece{position:absolute; opacity:0; animation-fill-mode:forwards; animation-timing-function:cubic-bezier(.22,.85,.3,1.2); box-sizing:border-box;}
+  .sp-handle{
+    top:0; left:21px; width:70px; height:38px; border:9px solid var(--accent); border-bottom:none;
+    border-radius:44px 44px 0 0;
+    transform:translate(-90px,-70px) rotate(-55deg); animation:spFly .65s .05s forwards;
+  }
+  .sp-body{
+    top:34px; left:6px; width:100px; height:56px; background:var(--accent);
+    clip-path:polygon(9% 0,91% 0,100% 100%,0% 100%);
+    transform:translate(0,110px) scale(.55); animation:spFly .6s .30s forwards;
+  }
+  .sp-item{width:15px; height:15px; border-radius:50%; background:#fff; top:52px; box-shadow:0 2px 4px rgba(0,0,0,0.12);}
+  .sp-item1{ left:24px; transform:translate(-70px,-50px) rotate(120deg); animation:spFly .55s .58s forwards;}
+  .sp-item2{ left:49px; transform:translate(0,-85px); animation:spFly .55s .68s forwards;}
+  .sp-item3{ left:74px; transform:translate(70px,-50px) rotate(-120deg); animation:spFly .55s .78s forwards;}
+  @keyframes spFly{
+    0%{opacity:0;}
+    55%{opacity:1;}
+    100%{opacity:1; transform:translate(0,0) rotate(0) scale(1);}
+  }
+  .sp-title{font-weight:800; font-size:19px; color:var(--text); opacity:0; letter-spacing:.2px; animation:spFade .5s .95s forwards;}
+  .sp-dots{display:flex; gap:6px; opacity:0; animation:spFade .4s 1.15s forwards;}
+  .sp-dots span{width:7px; height:7px; border-radius:50%; background:var(--accent); animation:spBounce 1s infinite ease-in-out;}
+  .sp-dots span:nth-child(2){animation-delay:.15s;}
+  .sp-dots span:nth-child(3){animation-delay:.3s;}
+  @keyframes spBounce{0%,80%,100%{transform:scale(.55); opacity:.5;} 40%{transform:scale(1); opacity:1;}}
+  @keyframes spFade{to{opacity:1;}}
+  @media (prefers-reduced-motion: reduce){
+    .sp-piece, .sp-title, .sp-dots{animation:none !important; opacity:1 !important; transform:none !important;}
+    #splash{transition:none;}
+  }
+</style>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="chart.min.js"></script>
+</head>
+<body>
+
+<div id="splash">
+  <div class="sp-logo">
+    <div class="sp-piece sp-handle"></div>
+    <div class="sp-piece sp-body"></div>
+    <div class="sp-piece sp-item sp-item1"></div>
+    <div class="sp-piece sp-item sp-item2"></div>
+    <div class="sp-piece sp-item sp-item3"></div>
+  </div>
+  <div class="sp-title">Spesa &amp; Costi</div>
+  <div class="sp-dots"><span></span><span></span><span></span></div>
+</div>
+
+<div id="loginScreen" class="login-screen hidden">
+  <div class="login-card">
+    <h2>🛒 Spesa & Costi</h2>
+    <div class="sub">Accedi per continuare</div>
+    <div id="loginError" class="login-error"></div>
+    <label>Email</label>
+    <input type="text" id="login_email" placeholder="Email" autocomplete="username">
+    <label>Password</label>
+    <input type="password" id="login_password" placeholder="Password" autocomplete="current-password">
+    <button class="btn block" onclick="doLogin()">Accedi</button>
+  </div>
+</div>
+
+<div id="appRoot" class="hidden">
+<header>
+  <h1 id="pageTitle">Spesa & Costi</h1>
+  <span class="net-badge offline" id="netBadge"><span class="dot"></span><span id="netBadgeText">Offline</span></span>
+</header>
+
+<main id="app"></main>
+
+<div class="bottom-bar" id="bottomBar">
+  <button class="bb-nav-btn" id="bbBack" onclick="goBack()">← Indietro</button>
+  <button class="bb-nav-btn" id="bbHome" onclick="goHome()">🏠 Home</button>
+  <div id="primaryAction"></div>
+</div>
+
+<div class="credits">TR/software <span id="creditsVersione"></span></div>
+</div>
+
+<div id="modalOverlay" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div id="modalMessage" class="modal-message"></div>
+    <div class="modal-actions" id="modalActions"></div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   Spesa & Costi — app locale, offline-first (localStorage)
+   ========================================================= */
+const APP_VERSION = 'v3.0';
+const CHANGELOG = [
+  {v:'v3.0', note:'L\'app ora richiede il login ed è condivisa: i dati non sono più solo sul telefono, ma sincronizzati in tempo reale con chiunque acceda con lo stesso account. Funziona comunque offline: le modifiche fatte senza connessione si sincronizzano da sole appena torna il segnale.'},
+  {v:'v2.0', note:'Aggiunta un\'animazione di avvio: il logo si "assembla" pezzo per pezzo quando apri l\'app.'},
+  {v:'v1.9', note:'Il tasto "📜 Storico spese" è ora accessibile anche dalla schermata Costi mensili, oltre che dalla Lista della spesa.'},
+  {v:'v1.8', note:'Aggiunta la gestione dei supermercati: quando chiudi la spesa puoi indicare dove l\'hai fatta, scegliendo da un elenco predefinito (Conad, Coop, Esselunga, Lidl, Eurospin, Carrefour, Pam, MD, Altro) che puoi personalizzare da Impostazioni → 🏬 Supermercati. Nei Grafici c\'è un nuovo grafico "Dove spendi di più" con il totale speso per ciascun supermercato.'},
+  {v:'v1.7', note:'Aggiunto lo "📜 Storico spese" nella Lista della spesa: ora puoi vedere tutte le spese chiuse in passato, e modificarne o eliminarne data, importo, numero articoli e tipo di pagamento.'},
+  {v:'v1.6', note:'Il tasto "✅ Fatto" nel catalogo articoli ora sta sulla stessa riga di "← Indietro" e "🏠 Home", invece di occupare una riga separata: meno spazio occupato in basso.'},
+  {v:'v1.5', note:'Corretto un bug importante nel service worker: durante l\'installazione di un aggiornamento, i file venivano a volte riscaricati dalla cache del browser invece che da internet, facendo restare l\'app bloccata sulla versione vecchia. Ora lo scaricamento ignora sempre la cache del browser, e l\'app si ricarica da sola quando trova una versione più recente.'},
+  {v:'v1.4', note:'Corretto il tasto "indietro" fisico di Android: ora riporta sempre in sicurezza alla schermata Home invece di uscire dall\'app. Nel catalogo articoli il tasto "✅ Fatto" è ora sempre visibile in basso, senza dover scorrere fino in fondo alla lista.'},
+  {v:'v1.3', note:'Corretta la firma in basso a destra: ora mostra "TR/software" con il numero di versione, come nelle altre app.'},
+  {v:'v1.2', note:'Chiudendo la spesa ora puoi indicare come hai pagato: il predefinito è Contanti, con la possibilità di cambiarlo in Buoni spesa o Pagamento elettronico (visibile solo se hai inserito l\'importo speso).'},
+  {v:'v1.1', note:'Aggiunto il tasto "← Indietro" in tutte le schermate secondarie, oltre a "🏠 Home". Nella lista della spesa ora si può raggruppare per categoria e allo stesso tempo ordinare per stato (da comprare/comprati) o alfabeticamente. Aggiunta in Impostazioni la gestione completa del catalogo articoli: puoi aggiungere, rinominare, spostare di categoria o eliminare i prodotti disponibili per l\'aggiunta rapida alla lista.'},
+  {v:'v1.0', note:'Prima versione: lista della spesa organizzata per categoria, costi mensili (bollette, abbonamenti, ecc.) e grafici che mettono insieme le due cose. Tutto salvato solo sul telefono, funziona anche senza connessione.'}
+];
+
+/* ---------- Firebase: stesso progetto del camper, collezione separata ---------- */
+const firebaseConfig = {
+  apiKey: "AIzaSyCOYBM320R9EwwMkBWpLTHlEiBZA8gg02Q",
+  authDomain: "camper-app-ccb86.firebaseapp.com",
+  projectId: "camper-app-ccb86",
+  storageBucket: "camper-app-ccb86.firebasestorage.app",
+  messagingSenderId: "476280929219",
+  appId: "1:476280929219:web:eda2af5900348b9333db76"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+const COLLECTION = 'listaSpesaApp';
+const DATA_KEYS = ['ss_lista_items','ss_lista_categorie','ss_lista_storico','ss_costi_mensili','ss_costi_categorie','ss_costi_pagamenti','ss_catalogo_articoli','ss_supermercati'];
+
+db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
+
+async function sGet(key, fallback){
+  try{
+    const snap = await db.collection(COLLECTION).doc(key).get();
+    if(snap.exists){
+      const data = snap.data();
+      return data && data.value !== undefined ? data.value : fallback;
+    }
+    return fallback;
+  }catch(e){
+    try{
+      const snapCache = await db.collection(COLLECTION).doc(key).get({source:'cache'});
+      if(snapCache.exists){
+        const data = snapCache.data();
+        return data && data.value !== undefined ? data.value : fallback;
+      }
+    }catch(e2){}
+    console.error('firestore get failed', key, e);
+    return fallback;
+  }
+}
+async function sSet(key, value){
+  try{
+    await db.collection(COLLECTION).doc(key).set({
+      value, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }catch(e){ console.error('firestore set failed', key, e); }
+}
+
+/* ---------- Cache locale sincrona sopra Firestore (le funzioni lsGet/lsSet restano sincrone
+   così tutto il resto dell'app, scritto per localStorage, funziona senza altre modifiche) ---------- */
+let _cache = {};
+function lsGet(key, fallback){
+  if(Object.prototype.hasOwnProperty.call(_cache, key) && _cache[key] !== undefined) return _cache[key];
+  return fallback;
+}
+function lsSet(key, value){
+  _cache[key] = value;
+  sSet(key, value);
+  return true;
+}
+async function prefetchCache(){
+  await Promise.all(DATA_KEYS.map(async k => { _cache[k] = await sGet(k, undefined); }));
+}
+
+/* ---------- Ascolto in tempo reale: se l'altra persona modifica, si aggiorna da sola ---------- */
+let _listeners = {};
+function watchAllKeys(){
+  DATA_KEYS.forEach(key=>{
+    if(_listeners[key]) return;
+    let primoScatto = true;
+    _listeners[key] = db.collection(COLLECTION).doc(key).onSnapshot(snap=>{
+      if(primoScatto){ primoScatto = false; return; }
+      if(snap.exists){
+        const data = snap.data();
+        _cache[key] = data && data.value !== undefined ? data.value : _cache[key];
+      }
+      if(isTypingInForm()) return;
+      render();
+    }, err => console.error('listener error', key, err));
+  });
+}
+function isTypingInForm(){
+  const el = document.activeElement;
+  if(!el) return false;
+  const tag = el.tagName;
+  return (tag==='INPUT' || tag==='TEXTAREA') && el.value && el.value.length>0;
+}
+
+/* ---------- Login ---------- */
+async function doLogin(){
+  const email = document.getElementById('login_email').value.trim();
+  const password = document.getElementById('login_password').value;
+  const errEl = document.getElementById('loginError');
+  errEl.style.display = 'none';
+  if(!email || !password){
+    errEl.textContent = 'Inserisci email e password.';
+    errEl.style.display = 'block';
+    return;
+  }
+  try{
+    await auth.signInWithEmailAndPassword(email, password);
+  }catch(e){
+    errEl.textContent = 'Email o password sbagliati.';
+    errEl.style.display = 'block';
+  }
+}
+let _authKnown = false, _authUser = null, _splashDone = false;
+function showAppRoot(){
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('appRoot').classList.remove('hidden');
+  initApp();
+}
+function showLoginScreen(){
+  document.getElementById('appRoot').classList.add('hidden');
+  document.getElementById('loginScreen').classList.remove('hidden');
+}
+async function initApp(){
+  updateNetBadge();
+  await prefetchCache();
+  ensureDefaultListaCategorie();
+  ensureDefaultCostiCategorie();
+  render();
+  watchAllKeys();
+}
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+function todayStr(){ const d=new Date(); return d.toISOString().slice(0,10); }
+function monthKey(d){ d = d || new Date(); return d.toISOString().slice(0,7); }
+function monthLabel(mk){
+  const [y,m] = mk.split('-').map(Number);
+  const NOMI = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+  return NOMI[m-1] + ' ' + y;
+}
+function addMonths(mk, delta){
+  let [y,m] = mk.split('-').map(Number);
+  m += delta;
+  while(m<1){ m+=12; y--; }
+  while(m>12){ m-=12; y++; }
+  return y + '-' + String(m).padStart(2,'0');
+}
+function euro(n){
+  n = Number(n)||0;
+  return '€ ' + n.toLocaleString('it-IT', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
+/* ---------- Modal generico (alert / confirm / input) ---------- */
+function customAlert(msg){
+  return new Promise(resolve=>{
+    const overlay = document.getElementById('modalOverlay');
+    const msgEl = document.getElementById('modalMessage');
+    msgEl.innerHTML = `<div>${escapeHtml(msg)}</div>`;
+    const actions = document.getElementById('modalActions');
+    actions.innerHTML = '';
+    const btn = document.createElement('button');
+    btn.className = 'btn block'; btn.textContent = 'OK';
+    actions.appendChild(btn);
+    overlay.classList.remove('hidden');
+    function onOk(){ overlay.classList.add('hidden'); btn.removeEventListener('click', onOk); resolve(true); }
+    btn.addEventListener('click', onOk);
+  });
+}
+function customConfirm(msg){
+  return new Promise(resolve=>{
+    const overlay = document.getElementById('modalOverlay');
+    const msgEl = document.getElementById('modalMessage');
+    msgEl.innerHTML = `<div>${escapeHtml(msg)}</div>`;
+    const actions = document.getElementById('modalActions');
+    actions.innerHTML = '';
+    const btnNo = document.createElement('button');
+    btnNo.className = 'btn secondary'; btnNo.textContent = 'Annulla';
+    const btnYes = document.createElement('button');
+    btnYes.className = 'btn danger'; btnYes.style.background='var(--danger)'; btnYes.style.color='#fff'; btnYes.style.border='none';
+    btnYes.textContent = 'Conferma';
+    actions.appendChild(btnNo); actions.appendChild(btnYes);
+    overlay.classList.remove('hidden');
+    function cleanup(){ overlay.classList.add('hidden'); btnNo.removeEventListener('click', onNo); btnYes.removeEventListener('click', onYes); }
+    function onNo(){ cleanup(); resolve(false); }
+    function onYes(){ cleanup(); resolve(true); }
+    btnNo.addEventListener('click', onNo);
+    btnYes.addEventListener('click', onYes);
+  });
+}
+function promptModal({title, hint, value='', type='text', placeholder='', okText='Salva'}){
+  return new Promise(resolve=>{
+    const overlay = document.getElementById('modalOverlay');
+    const msgEl = document.getElementById('modalMessage');
+    const inputId = 'pm_' + uid();
+    msgEl.innerHTML = `
+      <div style="font-weight:800; font-size:15.5px; margin-bottom:10px;">${escapeHtml(title)}</div>
+      ${hint ? `<div style="font-size:12.5px; color:var(--muted); margin-bottom:8px;">${escapeHtml(hint)}</div>` : ''}
+      <input type="${type}" id="${inputId}" value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" style="margin-bottom:0;" ${type==='number'?'step="0.01" inputmode="decimal"':''}>
+    `;
+    const actions = document.getElementById('modalActions');
+    actions.innerHTML = '';
+    const btnNo = document.createElement('button');
+    btnNo.className = 'btn secondary'; btnNo.textContent = 'Annulla';
+    const btnYes = document.createElement('button');
+    btnYes.className = 'btn'; btnYes.textContent = okText;
+    actions.appendChild(btnNo); actions.appendChild(btnYes);
+    overlay.classList.remove('hidden');
+    const inputEl = document.getElementById(inputId);
+    setTimeout(()=>{ inputEl.focus(); if(type==='text') inputEl.select(); }, 50);
+    function cleanup(){ overlay.classList.add('hidden'); btnNo.removeEventListener('click', onNo); btnYes.removeEventListener('click', onYes); inputEl.removeEventListener('keydown', onKey); }
+    function onNo(){ cleanup(); resolve(null); }
+    function onYes(){ const v = inputEl.value; cleanup(); resolve(v); }
+    function onKey(e){ if(e.key==='Enter') onYes(); }
+    btnNo.addEventListener('click', onNo);
+    btnYes.addEventListener('click', onYes);
+    inputEl.addEventListener('keydown', onKey);
+  });
+}
+function choiceModal({title, hint, options, allowSkip=true, skipText='Salta'}){
+  // options: array of {value, label}
+  return new Promise(resolve=>{
+    const overlay = document.getElementById('modalOverlay');
+    const msgEl = document.getElementById('modalMessage');
+    msgEl.innerHTML = `
+      <div style="font-weight:800; font-size:15.5px; margin-bottom:${hint?4:14}px;">${escapeHtml(title)}</div>
+      ${hint ? `<div style="font-size:12.5px; color:var(--muted); margin-bottom:14px;">${escapeHtml(hint)}</div>` : ''}
+      <div id="choiceModalBtns" style="display:flex; flex-direction:column; gap:8px;"></div>
+    `;
+    const btnsWrap = document.getElementById('choiceModalBtns');
+    const cleanupFns = [];
+    options.forEach(opt=>{
+      const b = document.createElement('button');
+      b.className = 'btn secondary block';
+      b.style.margin = '0';
+      b.textContent = opt.label;
+      function onClick(){ cleanup(); resolve(opt.value); }
+      b.addEventListener('click', onClick);
+      cleanupFns.push(()=>b.removeEventListener('click', onClick));
+      btnsWrap.appendChild(b);
+    });
+    const actions = document.getElementById('modalActions');
+    actions.innerHTML = '';
+    if(allowSkip){
+      const btnSkip = document.createElement('button');
+      btnSkip.className = 'btn secondary'; btnSkip.textContent = skipText;
+      function onSkip(){ cleanup(); resolve(null); }
+      btnSkip.addEventListener('click', onSkip);
+      cleanupFns.push(()=>btnSkip.removeEventListener('click', onSkip));
+      actions.appendChild(btnSkip);
+    }
+    overlay.classList.remove('hidden');
+    function cleanup(){ overlay.classList.add('hidden'); cleanupFns.forEach(fn=>fn()); }
+  });
+}
+function showChangelogModal(){
+  const overlay = document.getElementById('modalOverlay');
+  const msgEl = document.getElementById('modalMessage');
+  msgEl.innerHTML = `<div style="font-weight:800; font-size:15.5px; margin-bottom:12px;">Cronologia aggiornamenti</div>` +
+    CHANGELOG.map(c => `
+    <div style="margin-bottom:12px;">
+      <div style="font-weight:800; color:var(--accent); font-size:13.5px;">${c.v}</div>
+      <div style="font-size:13.5px; color:#3a3d42; margin-top:2px;">${escapeHtml(c.note)}</div>
+    </div>`).join('');
+  const actions = document.getElementById('modalActions');
+  actions.innerHTML = '';
+  const btnOk = document.createElement('button');
+  btnOk.className = 'btn block'; btnOk.textContent = 'Chiudi';
+  actions.appendChild(btnOk);
+  overlay.classList.remove('hidden');
+  function onOk(){ overlay.classList.add('hidden'); btnOk.removeEventListener('click', onOk); }
+  btnOk.addEventListener('click', onOk);
+}
+
+/* ---------- Stato badge online/offline ---------- */
+function updateNetBadge(){
+  const badge = document.getElementById('netBadge');
+  const text = document.getElementById('netBadgeText');
+  if(navigator.onLine){
+    badge.className = 'net-badge online';
+    text.textContent = 'Online';
+  } else {
+    badge.className = 'net-badge offline';
+    text.textContent = 'Offline';
+  }
+}
+window.addEventListener('online', updateNetBadge);
+window.addEventListener('offline', updateNetBadge);
+
+/* ---------- Categorie di default ---------- */
+function ensureDefaultListaCategorie(){
+  let cats = lsGet('ss_lista_categorie', null);
+  if(cats === null || cats.length === 0){
+    cats = [
+      {id:uid(), name:'Alimentari', icon:'🥫'},
+      {id:uid(), name:'Frutta e verdura', icon:'🥦'},
+      {id:uid(), name:'Igiene', icon:'🧴'},
+      {id:uid(), name:'Farmacia', icon:'💊'},
+      {id:uid(), name:'Pulizia', icon:'🧹'},
+      {id:uid(), name:'Bevande', icon:'🥤'},
+      {id:uid(), name:'Casa', icon:'🏠'},
+      {id:uid(), name:'Altro', icon:'📦'}
+    ];
+    lsSet('ss_lista_categorie', cats);
+  }
+  return cats;
+}
+function ensureDefaultCostiCategorie(){
+  let cats = lsGet('ss_costi_categorie', null);
+  if(cats === null || cats.length === 0){
+    cats = [
+      {id:uid(), name:'Bollette', icon:'🧾'},
+      {id:uid(), name:'Abbonamenti', icon:'📱'},
+      {id:uid(), name:'Affitto/Mutuo', icon:'🏠'},
+      {id:uid(), name:'Assicurazioni', icon:'🛡️'},
+      {id:uid(), name:'Trasporti', icon:'🚗'},
+      {id:uid(), name:'Salute', icon:'⚕️'},
+      {id:uid(), name:'Altro', icon:'📦'}
+    ];
+    lsSet('ss_costi_categorie', cats);
+  }
+  return cats;
+}
+const CAT_COLORS = {
+  'Alimentari':'#fde3cf', 'Frutta e verdura':'#d7f5e3', 'Igiene':'#dbeafe', 'Farmacia':'#fce7f3',
+  'Pulizia':'#e8ddfb', 'Bevande':'#fde0e0', 'Casa':'#fdf1c7', 'Altro':'#eceef1',
+  'Bollette':'#fde0e0', 'Abbonamenti':'#dbeafe', 'Affitto/Mutuo':'#fdf1c7', 'Assicurazioni':'#e8ddfb',
+  'Trasporti':'#d7f5e3', 'Salute':'#fce7f3'
+};
+const CUSTOM_COLORS = ['#fde3cf','#d7f5e3','#dbeafe','#fce7f3','#e8ddfb','#fde0e0','#fdf1c7','#eceef1'];
+function colorePerCategoria(cat){
+  if(CAT_COLORS[cat]) return CAT_COLORS[cat];
+  let hash = 0;
+  for(let i=0;i<cat.length;i++) hash = cat.charCodeAt(i) + ((hash<<5)-hash);
+  return CUSTOM_COLORS[Math.abs(hash) % CUSTOM_COLORS.length];
+}
+function iconaPerCategoria(cat, listaCategorie){
+  const found = (listaCategorie||[]).find(c=>c.name===cat);
+  return found ? found.icon : '📦';
+}
+
+/* ---------- Supermercati ---------- */
+function ensureDefaultSupermercati(){
+  let sup = lsGet('ss_supermercati', null);
+  if(sup === null || sup.length === 0){
+    sup = ['Conad','Coop','Esselunga','Lidl','Eurospin','Carrefour','Pam','MD','Altro']
+      .map(nome => ({id:uid(), nome}));
+    lsSet('ss_supermercati', sup);
+  }
+  return sup;
+}
+
+/* ---------- Catalogo articoli per aggiunta rapida ---------- */
+const CATALOGO_SPESA = [
+  {n:'Pasta', c:'Alimentari'},{n:'Riso', c:'Alimentari'},{n:'Pane', c:'Alimentari'},
+  {n:'Uova', c:'Alimentari'},{n:'Latte', c:'Alimentari'},{n:'Burro', c:'Alimentari'},
+  {n:'Yogurt', c:'Alimentari'},{n:'Parmigiano', c:'Alimentari'},{n:'Mozzarella', c:'Alimentari'},
+  {n:'Olio extravergine', c:'Alimentari'},{n:'Aceto', c:'Alimentari'},{n:'Sale', c:'Alimentari'},
+  {n:'Zucchero', c:'Alimentari'},{n:'Farina', c:'Alimentari'},{n:'Lievito', c:'Alimentari'},
+  {n:'Caffè', c:'Alimentari'},{n:'Tè', c:'Alimentari'},{n:'Biscotti', c:'Alimentari'},
+  {n:'Cereali', c:'Alimentari'},{n:'Marmellata', c:'Alimentari'},{n:'Nutella', c:'Alimentari'},
+  {n:'Tonno in scatola', c:'Alimentari'},{n:'Passata di pomodoro', c:'Alimentari'},{n:'Legumi in scatola', c:'Alimentari'},
+  {n:'Prosciutto', c:'Alimentari'},{n:'Salame', c:'Alimentari'},{n:'Pollo', c:'Alimentari'},
+  {n:'Carne macinata', c:'Alimentari'},{n:'Pesce fresco', c:'Alimentari'},{n:'Pizza surgelata', c:'Alimentari'},
+  {n:'Gelato', c:'Alimentari'},{n:'Patatine', c:'Alimentari'},
+  {n:'Mele', c:'Frutta e verdura'},{n:'Banane', c:'Frutta e verdura'},{n:'Arance', c:'Frutta e verdura'},
+  {n:'Limoni', c:'Frutta e verdura'},{n:'Pomodori', c:'Frutta e verdura'},{n:'Insalata', c:'Frutta e verdura'},
+  {n:'Carote', c:'Frutta e verdura'},{n:'Patate', c:'Frutta e verdura'},{n:'Cipolle', c:'Frutta e verdura'},
+  {n:'Zucchine', c:'Frutta e verdura'},{n:'Peperoni', c:'Frutta e verdura'},{n:'Aglio', c:'Frutta e verdura'},
+  {n:'Basilico', c:'Frutta e verdura'},
+  {n:'Shampoo', c:'Igiene'},{n:'Bagnoschiuma', c:'Igiene'},{n:'Dentifricio', c:'Igiene'},
+  {n:'Spazzolino', c:'Igiene'},{n:'Deodorante', c:'Igiene'},{n:'Carta igienica', c:'Igiene'},
+  {n:'Fazzoletti', c:'Igiene'},{n:'Assorbenti', c:'Igiene'},{n:'Rasoi', c:'Igiene'},
+  {n:'Paracetamolo', c:'Farmacia'},{n:'Ibuprofene', c:'Farmacia'},{n:'Cerotti', c:'Farmacia'},
+  {n:'Disinfettante', c:'Farmacia'},{n:'Vitamina C', c:'Farmacia'},
+  {n:'Detersivo piatti', c:'Pulizia'},{n:'Detersivo lavatrice', c:'Pulizia'},{n:'Ammorbidente', c:'Pulizia'},
+  {n:'Candeggina', c:'Pulizia'},{n:'Sgrassatore', c:'Pulizia'},{n:'Detersivo pavimenti', c:'Pulizia'},
+  {n:'Spugne', c:'Pulizia'},{n:'Guanti da cucina', c:'Pulizia'},{n:'Sacchi spazzatura', c:'Pulizia'},
+  {n:'Acqua naturale', c:'Bevande'},{n:'Acqua frizzante', c:'Bevande'},{n:'Vino', c:'Bevande'},
+  {n:'Birra', c:'Bevande'},{n:'Succo di frutta', c:'Bevande'},{n:'Bibite gassate', c:'Bevande'},
+  {n:'Carta forno', c:'Casa'},{n:'Pellicola alimentare', c:'Casa'},{n:'Carta alluminio', c:'Casa'},
+  {n:'Batterie', c:'Casa'},{n:'Lampadine', c:'Casa'},{n:'Candele', c:'Casa'}
+];
+
+/* ---------- Home ---------- */
+const BASE_SECTIONS = [
+  {id:'lista_spesa', icon:'🛒', color:'#fef3c7', label:'Lista della spesa', sub:'Organizzata per categoria'},
+  {id:'costi_mensili', icon:'💶', color:'#dbeafe', label:'Costi mensili', sub:'Bollette, abbonamenti e spese fisse'},
+  {id:'grafici', icon:'📊', color:'#d0f4ea', label:'Grafici', sub:'Spesa e costi nel tempo'},
+  {id:'impostazioni', icon:'⚙️', color:'#eceef1', label:'Impostazioni', sub:'Categorie, backup, versione'}
+];
+
+let state = { route:'home', costiMese: monthKey(), editCostoId:null, editCatId:null, editCatKind:null, catalogoSearch:'', catGestioneSearch:'', editStoricoId:null };
+let graficiChartInstances = [];
+let navHistory = [];
+
+function snapshotState(){
+  return {
+    route: state.route, costiMese: state.costiMese, editCostoId: state.editCostoId,
+    editCatId: state.editCatId, editCatKind: state.editCatKind,
+    catalogoSearch: state.catalogoSearch, catGestioneSearch: state.catGestioneSearch,
+    editStoricoId: state.editStoricoId
+  };
+}
+function goHome(){ navHistory = []; state.route='home'; render(); }
+function navigate(route, extra){
+  navHistory.push(snapshotState());
+  state.route = route;
+  if(extra) Object.assign(state, extra);
+  render();
+}
+function goBack(){
+  if(navHistory.length === 0){ goHome(); return; }
+  Object.assign(state, navHistory.pop());
+  render();
+}
+
+/* Tasto "indietro" fisico di Android/browser: riporta sempre in sicurezza alla Home
+   invece di uscire dall'app. Manteniamo un solo stato "guardia" nella cronologia
+   del browser mentre siamo fuori dalla Home. */
+function ensureBackGuard(){
+  if(state.route !== 'home'){
+    if(!history.state || !history.state.ssGuard){
+      history.pushState({ssGuard:true}, '', location.href);
+    }
+  }
+}
+window.addEventListener('popstate', () => {
+  navHistory = [];
+  state.route = 'home';
+  render();
+});
+
+function render(){
+  const app = document.getElementById('app');
+  const title = document.getElementById('pageTitle');
+  const bar = document.getElementById('bottomBar');
+  const primaryEl = document.getElementById('primaryAction');
+  bar.classList.toggle('show', state.route !== 'home');
+  primaryEl.innerHTML = '';
+  ensureBackGuard();
+
+  if(state.route === 'home'){
+    title.textContent = 'Spesa & Costi';
+    app.innerHTML = renderHome();
+  } else if(state.route === 'lista_spesa'){
+    title.textContent = 'Lista della spesa';
+    app.innerHTML = renderListaSpesa();
+  } else if(state.route === 'catalogo_spesa'){
+    title.textContent = 'Catalogo articoli';
+    app.innerHTML = renderCatalogoSpesa();
+  } else if(state.route === 'costi_mensili'){
+    title.textContent = 'Costi mensili';
+    app.innerHTML = renderCostiMensili();
+  } else if(state.route === 'costo_form'){
+    title.textContent = state.editCostoId ? 'Modifica costo' : 'Nuovo costo';
+    app.innerHTML = renderCostoForm();
+  } else if(state.route === 'grafici'){
+    title.textContent = 'Grafici';
+    app.innerHTML = renderGrafici();
+  } else if(state.route === 'impostazioni'){
+    title.textContent = 'Impostazioni';
+    app.innerHTML = renderImpostazioni();
+  } else if(state.route === 'cat_editor'){
+    title.textContent = state.editCatKind === 'spesa' ? 'Categorie lista spesa' : 'Categorie costi';
+    app.innerHTML = renderCategorieEditor(state.editCatKind);
+  } else if(state.route === 'catalogo_gestione'){
+    title.textContent = 'Catalogo articoli';
+    app.innerHTML = renderGestioneCatalogo();
+  } else if(state.route === 'storico_spesa'){
+    title.textContent = 'Storico spese';
+    app.innerHTML = renderStoricoSpesa();
+  } else if(state.route === 'supermercati_editor'){
+    title.textContent = 'Supermercati';
+    app.innerHTML = renderSupermercatiEditor();
+  }
+
+  if(state.route === 'catalogo_spesa'){
+    primaryEl.innerHTML = `<button class="btn ok" onclick="goBack()">✅ Fatto</button>`;
+  }
+
+  if(state.route === 'grafici') requestAnimationFrame(drawGrafici);
+}
+
+function renderHome(){
+  return `<div class="list-spacer"></div><div class="list">` +
+    BASE_SECTIONS.map(s => `
+      <div class="item" onclick="navigate('${s.id}')">
+        <div class="badge" style="background:${s.color};">${s.icon}</div>
+        <div class="txt"><div class="t">${s.label}</div><div class="s">${s.sub}</div></div>
+        <div class="chev">›</div>
+      </div>`).join('') +
+    `</div>`;
+}
+
+/* ---------- LISTA DELLA SPESA ---------- */
+function getListaGroupCat(){ try{ return localStorage.getItem('ss_ls_groupcat') === '1'; }catch(e){ return false; } }
+function setListaGroupCat(v){ try{ localStorage.setItem('ss_ls_groupcat', v?'1':'0'); }catch(e){} render(); }
+function getListaOrder(){ try{ return localStorage.getItem('ss_ls_order') || 'stato'; }catch(e){ return 'stato'; } }
+function setListaOrder(v){ try{ localStorage.setItem('ss_ls_order', v); }catch(e){} render(); }
+
+function renderListaSpesa(){
+  const items = lsGet('ss_lista_items', []);
+  const categorie = ensureDefaultListaCategorie();
+  const groupCat = getListaGroupCat();
+  const orderMode = getListaOrder();
+  let html = `
+    <div class="card">
+      <label>Aggiungi articolo</label>
+      <input type="text" id="ls_text" placeholder="Es. Pane" onkeydown="if(event.key==='Enter') addListaSpesa()">
+      <select id="ls_cat_select">
+        ${categorie.map(c=>`<option value="${escapeHtml(c.name)}">${c.icon} ${escapeHtml(c.name)}</option>`).join('')}
+      </select>
+      <button class="btn block" onclick="addListaSpesa()">Aggiungi</button>
+      <button class="btn secondary block" onclick="navigate('catalogo_spesa')">📚 Aggiungi dal catalogo articoli</button>
+    </div>
+    <div class="fab-row" style="margin-top:0;"><button class="btn secondary block" onclick="navigate('storico_spesa', {editStoricoId:null})">📜 Storico spese</button></div>
+  `;
+  if(items.length === 0){
+    html += `<div class="empty">Lista vuota. Aggiungi un articolo o usa il catalogo qui sopra. 🛒</div>`;
+    return html;
+  }
+  html += `
+    <div class="sort-toggle">
+      <button class="sort-btn ${groupCat?'active':''}" onclick="setListaGroupCat(${!groupCat})">🗂️ Per categoria</button>
+      <button class="sort-btn ${orderMode==='stato'?'active':''}" onclick="setListaOrder('stato')">☑️ Per stato</button>
+      <button class="sort-btn ${orderMode==='alfa'?'active':''}" onclick="setListaOrder('alfa')">🔤 A-Z</button>
+    </div>
+  `;
+  function orderFn(a,b){
+    if(orderMode==='alfa') return a.text.localeCompare(b.text, 'it');
+    return (a.done===b.done) ? a.text.localeCompare(b.text, 'it') : (a.done?1:-1);
+  }
+  const sorted = items.slice().sort(orderFn);
+
+  if(groupCat){
+    const groups = {};
+    sorted.forEach(it=>{ const c = it.category||'Altro'; (groups[c] = groups[c]||[]).push(it); });
+    Object.keys(groups).sort((a,b)=>a.localeCompare(b,'it')).forEach(cat=>{
+      html += `<div class="cat-header" style="background:${colorePerCategoria(cat)};">
+        <span class="ls-cat-icon">${iconaPerCategoria(cat, categorie)}</span> ${escapeHtml(cat)}
+        <span class="cat-count">${groups[cat].length}</span>
+      </div>`;
+      groups[cat].forEach(it => html += checkitemHtml(it, categorie));
+    });
+  } else {
+    sorted.forEach(it => html += checkitemHtml(it, categorie));
+  }
+
+  const fatti = items.filter(i=>i.done).length;
+  html += `<div class="fab-row">`;
+  if(fatti>0) html += `<button class="btn ok block" onclick="chiudiSpesa()">✅ Chiudi spesa (${fatti})</button>`;
+  html += `</div>`;
+  if(fatti>0) html += `<div class="fab-row" style="margin-top:0;"><button class="btn secondary block" onclick="clearListaSpesaFatti()">🗑️ Rimuovi spuntati senza salvare</button></div>`;
+  return html;
+}
+function checkitemHtml(it, categorie){
+  return `<div class="checkitem ${it.done?'done':''}" onclick="toggleListaSpesa('${it.id}')">
+    <div class="check-circle">${it.done?'✓':''}</div>
+    <span class="ls-cat-icon">${iconaPerCategoria(it.category, categorie)}</span>
+    <div class="label">${escapeHtml(it.text)}</div>
+    <button class="del" onclick="event.stopPropagation(); delListaSpesa('${it.id}')">🗑️</button>
+  </div>`;
+}
+function addListaSpesa(){
+  const textEl = document.getElementById('ls_text');
+  const text = textEl.value.trim();
+  if(!text) return;
+  const cat = document.getElementById('ls_cat_select').value;
+  const items = lsGet('ss_lista_items', []);
+  items.push({id:uid(), text, category:cat, done:false});
+  lsSet('ss_lista_items', items);
+  render();
+}
+function toggleListaSpesa(id){
+  const items = lsGet('ss_lista_items', []);
+  const it = items.find(i=>i.id===id);
+  if(it) it.done = !it.done;
+  lsSet('ss_lista_items', items);
+  render();
+}
+function delListaSpesa(id){
+  let items = lsGet('ss_lista_items', []);
+  items = items.filter(i=>i.id!==id);
+  lsSet('ss_lista_items', items);
+  render();
+}
+async function clearListaSpesaFatti(){
+  if(!(await customConfirm('Rimuovere gli articoli spuntati dalla lista senza salvarli nello storico spesa?'))) return;
+  let items = lsGet('ss_lista_items', []);
+  items = items.filter(i=>!i.done);
+  lsSet('ss_lista_items', items);
+  render();
+}
+async function chiudiSpesa(){
+  const items = lsGet('ss_lista_items', []);
+  const acquistati = items.filter(i=>i.done);
+  if(acquistati.length===0){ await customAlert('Non ci sono ancora articoli spuntati come acquistati.'); return; }
+  const importoStr = await promptModal({
+    title:'Chiudi spesa',
+    hint:`Quanto hai speso in totale per questi ${acquistati.length} articoli? (Lascia vuoto se non vuoi registrarlo nei grafici)`,
+    type:'number', placeholder:'Es. 45.90', okText:'Salva'
+  });
+  if(importoStr === null) return;
+  const importo = importoStr.trim()==='' ? null : Math.max(0, parseFloat(importoStr.replace(',','.'))||0);
+  let pagamento = null;
+  if(importo !== null){
+    const scelta = await choiceModal({
+      title:'Come hai pagato?',
+      hint:'Il pagamento predefinito è Contanti. Tocca qui sotto solo se hai usato qualcos\'altro.',
+      options:[
+        {value:'Buoni spesa', label:'🛍️ Buoni spesa'},
+        {value:'Pagamento elettronico', label:'💳 Pagamento elettronico'}
+      ],
+      allowSkip:true, skipText:'💵 Contanti (predefinito)'
+    });
+    pagamento = scelta || 'Contanti';
+  }
+  const supermercati = ensureDefaultSupermercati();
+  const sceltaSuper = await choiceModal({
+    title:'Dove hai fatto la spesa?',
+    hint:'Tocca "Non specificare" se preferisci non indicarlo.',
+    options: supermercati.map(s=>({value:s.nome, label:s.nome})),
+    allowSkip:true, skipText:'Non specificare'
+  });
+  const supermercato = sceltaSuper || null;
+  const storico = lsGet('ss_lista_storico', []);
+  storico.push({id:uid(), data:todayStr(), articoli:acquistati.length, importo, pagamento, supermercato});
+  lsSet('ss_lista_storico', storico.slice(-500));
+  const restanti = items.filter(i=>!i.done);
+  lsSet('ss_lista_items', restanti);
+  render();
+}
+
+/* ---------- Storico spese (visualizza / modifica / elimina) ---------- */
+function formatDataIt(d){
+  if(!d) return '';
+  const [y,m,day] = d.split('-');
+  return `${day}/${m}/${y}`;
+}
+function pagamentoIcona(p){
+  if(p==='Buoni spesa') return '🛍️';
+  if(p==='Pagamento elettronico') return '💳';
+  return '💵';
+}
+function renderStoricoSpesa(){
+  const storico = lsGet('ss_lista_storico', []).slice().sort((a,b)=> (b.data||'').localeCompare(a.data||''));
+  if(storico.length===0){
+    return `<div class="list-spacer"></div><div class="empty">Nessuna spesa chiusa ancora. Quando chiudi la lista della spesa, comparirà qui. 🧾</div>`;
+  }
+  let html = `<div class="list-spacer"></div>`;
+  storico.forEach(s=>{
+    if(state.editStoricoId === s.id){
+      html += renderStoricoEditForm(s);
+    } else {
+      const importoTxt = s.importo!=null ? euro(s.importo) : '—';
+      const dettPezzi = [`${s.articoli} articoli`];
+      if(s.supermercato) dettPezzi.push(`🏬 ${escapeHtml(s.supermercato)}`);
+      dettPezzi.push(s.importo!=null ? `${pagamentoIcona(s.pagamento)} ${escapeHtml(s.pagamento||'Contanti')}` : 'importo non registrato');
+      const dettaglio = dettPezzi.join(' · ');
+      html += `<div class="card" style="cursor:pointer; display:flex; align-items:center; gap:12px; padding:14px 16px;" onclick="state.editStoricoId='${s.id}'; render();">
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight:800; font-size:14.5px;">${formatDataIt(s.data)}</div>
+          <div style="font-size:12.5px; color:var(--muted); margin-top:2px;">${dettaglio}</div>
+        </div>
+        <div style="font-weight:800; font-size:16px; color:${s.importo!=null?'var(--text)':'var(--muted)'}; white-space:nowrap;">${importoTxt}</div>
+        <span class="chev">›</span>
+      </div>`;
+    }
+  });
+  return html;
+}
+function renderStoricoEditForm(s){
+  const opzioni = ['Contanti','Buoni spesa','Pagamento elettronico'];
+  const supermercati = ensureDefaultSupermercati();
+  return `<div class="card">
+    <div class="row" style="justify-content:space-between; align-items:center; margin-top:0; margin-bottom:6px;">
+      <div class="title" style="margin:0;">Modifica spesa</div>
+      <button class="del" onclick="state.editStoricoId=null; render();">✕</button>
+    </div>
+    <label>Data</label>
+    <input type="date" id="st_data_${s.id}" value="${s.data||''}">
+    <label>Numero articoli</label>
+    <input type="number" min="0" id="st_articoli_${s.id}" value="${s.articoli||0}">
+    <label>Supermercato</label>
+    <select id="st_super_${s.id}">
+      <option value="" ${!s.supermercato?'selected':''}>Non specificato</option>
+      ${supermercati.map(sup=>`<option value="${escapeHtml(sup.nome)}" ${s.supermercato===sup.nome?'selected':''}>${escapeHtml(sup.nome)}</option>`).join('')}
+    </select>
+    <label>Importo speso (€) — lascia vuoto se non vuoi registrarlo</label>
+    <input type="number" step="0.01" inputmode="decimal" id="st_importo_${s.id}" value="${s.importo!=null?s.importo:''}" placeholder="Es. 45.90">
+    <label>Pagamento</label>
+    <select id="st_pag_${s.id}">
+      ${opzioni.map(o=>`<option value="${o}" ${s.pagamento===o?'selected':''}>${pagamentoIcona(o)} ${o}</option>`).join('')}
+    </select>
+    <button class="btn block" onclick="salvaStorico('${s.id}')">💾 Salva modifiche</button>
+    <button class="btn danger block" style="margin-top:10px;" onclick="delStorico('${s.id}')">Elimina questa spesa</button>
+  </div>`;
+}
+function salvaStorico(id){
+  const storico = lsGet('ss_lista_storico', []);
+  const s = storico.find(x=>x.id===id);
+  if(!s) return;
+  const dataEl = document.getElementById('st_data_'+id);
+  s.data = dataEl.value || s.data;
+  s.articoli = Math.max(0, parseInt(document.getElementById('st_articoli_'+id).value, 10) || 0);
+  const importoRaw = document.getElementById('st_importo_'+id).value;
+  s.importo = importoRaw.trim()==='' ? null : Math.max(0, parseFloat(importoRaw.replace(',','.'))||0);
+  s.pagamento = s.importo!=null ? document.getElementById('st_pag_'+id).value : null;
+  const superVal = document.getElementById('st_super_'+id).value;
+  s.supermercato = superVal || null;
+  lsSet('ss_lista_storico', storico);
+  state.editStoricoId = null;
+  render();
+}
+async function delStorico(id){
+  if(!(await customConfirm('Eliminare questa spesa dallo storico? Non sarà più conteggiata nei grafici.'))) return;
+  let storico = lsGet('ss_lista_storico', []);
+  storico = storico.filter(x=>x.id!==id);
+  lsSet('ss_lista_storico', storico);
+  state.editStoricoId = null;
+  render();
+}
+
+/* ---------- Catalogo articoli (persistente, modificabile da Impostazioni) ---------- */
+function ensureCatalogoArticoli(){
+  let arts = lsGet('ss_catalogo_articoli', null);
+  if(arts === null){
+    arts = CATALOGO_SPESA.map(item => ({id:uid(), nome:item.n, categoria:item.c}));
+    lsSet('ss_catalogo_articoli', arts);
+  }
+  return arts;
+}
+function renderCatalogoSpesa(){
+  const items = lsGet('ss_lista_items', []);
+  const selectedTexts = new Set(items.map(i=>i.text.toLowerCase()));
+  const categorie = ensureDefaultListaCategorie();
+  const catalogo = ensureCatalogoArticoli();
+  const q = (state.catalogoSearch||'').toLowerCase();
+  const filtered = catalogo.filter(a => !q || a.nome.toLowerCase().includes(q));
+  let html = `<div class="card">
+    <input type="text" placeholder="Cerca nel catalogo..." value="${escapeHtml(state.catalogoSearch||'')}" oninput="state.catalogoSearch=this.value; render();" style="margin-bottom:0;">
+  </div>`;
+  const groups = {};
+  filtered.forEach(a => { (groups[a.categoria] = groups[a.categoria]||[]).push(a); });
+  const order = Object.keys(groups).sort((a,b)=>a.localeCompare(b,'it'));
+  if(order.length===0){
+    html += `<div class="empty">Nessun articolo trovato.</div>`;
+  } else {
+    order.forEach(cat=>{
+      html += `<div class="cat-header" style="background:${colorePerCategoria(cat)};">
+        <span class="ls-cat-icon">${iconaPerCategoria(cat, categorie)}</span> ${escapeHtml(cat)}
+      </div><div id="catalogoList">`;
+      groups[cat].sort((a,b)=>a.nome.localeCompare(b.nome,'it')).forEach(a=>{
+        const sel = selectedTexts.has(a.nome.toLowerCase());
+        html += `<div class="catalogo-row ${sel?'selected':''}" onclick="toggleCatalogoArticolo('${a.id}')">
+          <span>${escapeHtml(a.nome)}</span><span class="catalogo-plus">${sel?'✓':'+'}</span>
+        </div>`;
+      });
+      html += `</div>`;
+    });
+  }
+  return html;
+}
+function toggleCatalogoArticolo(catalogoId){
+  const catalogo = ensureCatalogoArticoli();
+  const art = catalogo.find(a=>a.id===catalogoId);
+  if(!art) return;
+  let items = lsGet('ss_lista_items', []);
+  const existing = items.find(i=>i.text.toLowerCase()===art.nome.toLowerCase());
+  if(existing){
+    items = items.filter(i=>i.id!==existing.id);
+  } else {
+    items.push({id:uid(), text:art.nome, category:art.categoria, done:false});
+  }
+  lsSet('ss_lista_items', items);
+  render();
+}
+
+/* ---------- Gestione catalogo articoli (da Impostazioni) ---------- */
+function renderGestioneCatalogo(){
+  const categorie = ensureDefaultListaCategorie();
+  const catalogo = ensureCatalogoArticoli();
+  const q = (state.catGestioneSearch||'').trim().toLowerCase();
+  let html = `
+    <div class="card">
+      <label>Nuovo articolo</label>
+      <input type="text" id="ga_nome" placeholder="Es. Pane, Aspirina..." onkeydown="if(event.key==='Enter') aggiungiArticoloCatalogo()">
+      <select id="ga_cat">
+        ${categorie.map(c=>`<option value="${escapeHtml(c.name)}">${c.icon} ${escapeHtml(c.name)}</option>`).join('')}
+      </select>
+      <button class="btn block" onclick="aggiungiArticoloCatalogo()">Aggiungi articolo</button>
+    </div>
+    <div class="card">
+      <label>Cerca nel catalogo (${catalogo.length} articoli)</label>
+      <input type="text" value="${escapeHtml(state.catGestioneSearch||'')}" placeholder="Es. detersivo, pane..." oninput="state.catGestioneSearch=this.value; render();" style="margin-bottom:0;">
+    </div>
+  `;
+  let arts = catalogo.slice().sort((a,b)=>a.nome.localeCompare(b.nome,'it'));
+  if(q) arts = arts.filter(a=>a.nome.toLowerCase().includes(q));
+  if(arts.length===0){
+    html += `<div class="empty">Nessun articolo trovato.</div>`;
+    return html;
+  }
+  html += arts.slice(0,150).map(a=>{
+    if(state.editCatId === a.id){
+      return `<div class="card">
+        <div class="row" style="justify-content:space-between; align-items:flex-start; margin-bottom:6px; margin-top:0;">
+          <div class="title" style="margin:0;">Modifica articolo</div>
+          <button class="del" onclick="state.editCatId=null; render();">✕</button>
+        </div>
+        <label>Nome</label>
+        <input type="text" id="art_nome_${a.id}" value="${escapeHtml(a.nome)}">
+        <label>Categoria</label>
+        <select id="art_cat_${a.id}">
+          ${categorie.map(c=>`<option value="${escapeHtml(c.name)}" ${c.name===a.categoria?'selected':''}>${c.icon} ${escapeHtml(c.name)}</option>`).join('')}
+        </select>
+        <button class="btn block" onclick="salvaArticoloCatalogo('${a.id}')">💾 Salva modifiche</button>
+        <button class="btn danger block" style="margin-top:10px;" onclick="delArticoloCatalogo('${a.id}')">Elimina articolo</button>
+      </div>`;
+    }
+    const icona = iconaPerCategoria(a.categoria, categorie);
+    return `<div class="card" style="cursor:pointer; display:flex; align-items:center; gap:10px; padding:13px 16px;" onclick="state.editCatId='${a.id}'; render();">
+      <span style="flex:1; font-size:14.5px;">${escapeHtml(a.nome)}</span>
+      <span style="font-size:12px; color:var(--muted); white-space:nowrap;">${icona} ${escapeHtml(a.categoria)}</span>
+      <span class="chev">›</span>
+    </div>`;
+  }).join('');
+  if(arts.length>150) html += `<div class="empty" style="padding:10px 4px;">Altri ${arts.length-150} risultati: affina la ricerca...</div>`;
+  return html;
+}
+function aggiungiArticoloCatalogo(){
+  const nomeEl = document.getElementById('ga_nome');
+  const nome = nomeEl.value.trim();
+  const categoria = document.getElementById('ga_cat').value;
+  if(!nome) return;
+  const catalogo = ensureCatalogoArticoli();
+  if(catalogo.some(a=>a.nome.toLowerCase()===nome.toLowerCase())){
+    customAlert('Esiste già un articolo con questo nome nel catalogo.');
+    return;
+  }
+  catalogo.push({id:uid(), nome, categoria});
+  lsSet('ss_catalogo_articoli', catalogo);
+  render();
+}
+function salvaArticoloCatalogo(id){
+  const nome = document.getElementById('art_nome_'+id).value.trim();
+  const categoria = document.getElementById('art_cat_'+id).value;
+  if(!nome){ customAlert('Il nome dell\'articolo non può essere vuoto.'); return; }
+  const catalogo = ensureCatalogoArticoli();
+  const a = catalogo.find(x=>x.id===id);
+  if(a){ a.nome = nome; a.categoria = categoria; }
+  lsSet('ss_catalogo_articoli', catalogo);
+  state.editCatId = null;
+  render();
+}
+async function delArticoloCatalogo(id){
+  if(!(await customConfirm('Eliminare questo articolo dal catalogo? Non sarà più selezionabile per aggiunte rapide alla lista spesa.'))) return;
+  let catalogo = ensureCatalogoArticoli();
+  catalogo = catalogo.filter(a=>a.id!==id);
+  lsSet('ss_catalogo_articoli', catalogo);
+  state.editCatId = null;
+  render();
+}
+
+/* ---------- Categorie editor (condiviso spesa/costi) ---------- */
+function renderCategorieEditor(kind){
+  const cats = kind==='spesa' ? ensureDefaultListaCategorie() : ensureDefaultCostiCategorie();
+  let html = `<div class="list-spacer"></div><div class="card" style="padding:0;">`;
+  cats.forEach(c=>{
+    html += `<div class="cc-row">
+      <span class="ls-cat-icon">${c.icon}</span>
+      <div class="cc-row-name">${escapeHtml(c.name)}</div>
+      <button class="edit" onclick="editCategoria('${kind}','${c.id}')">✏️</button>
+      <button class="del" onclick="delCategoria('${kind}','${c.id}')">🗑️</button>
+    </div>`;
+  });
+  html += `</div>`;
+  html += `
+    <div class="card">
+      <label>Nuova categoria</label>
+      <div class="row">
+        <div style="flex:0 0 68px;"><input type="text" id="newcat_icon" value="📦" maxlength="4" style="text-align:center; margin-bottom:0;"></div>
+        <div style="flex:1;"><input type="text" id="newcat_name" placeholder="Es. Sport" style="margin-bottom:0;"></div>
+      </div>
+      <button class="btn block" style="margin-top:12px;" onclick="addCategoria('${kind}')">➕ Aggiungi categoria</button>
+    </div>
+  `;
+  return html;
+}
+function addCategoria(kind){
+  const nomeEl = document.getElementById('newcat_name');
+  const iconEl = document.getElementById('newcat_icon');
+  const nome = nomeEl.value.trim();
+  if(!nome){ customAlert('Inserisci un nome per la categoria.'); return; }
+  const icona = (iconEl.value||'📦').trim() || '📦';
+  const key = kind==='spesa' ? 'ss_lista_categorie' : 'ss_costi_categorie';
+  const cats = lsGet(key, []);
+  cats.push({id:uid(), name:nome, icon:icona});
+  lsSet(key, cats);
+  render();
+}
+async function editCategoria(kind, id){
+  const key = kind==='spesa' ? 'ss_lista_categorie' : 'ss_costi_categorie';
+  const cats = lsGet(key, []);
+  const c = cats.find(x=>x.id===id);
+  if(!c) return;
+  const nome = await promptModal({title:'Modifica categoria', value:c.name, okText:'Salva'});
+  if(nome===null || nome.trim()==='') return;
+  const icona = await promptModal({title:'Icona (emoji)', value:c.icon, okText:'Salva'});
+  const oldName = c.name;
+  c.name = nome.trim();
+  c.icon = (icona||c.icon).trim() || c.icon;
+  lsSet(key, cats);
+  if(kind==='spesa'){
+    const items = lsGet('ss_lista_items', []);
+    items.forEach(i=>{ if(i.category===oldName) i.category = c.name; });
+    lsSet('ss_lista_items', items);
+  } else {
+    const costi = lsGet('ss_costi_mensili', []);
+    costi.forEach(x=>{ if(x.categoria===oldName) x.categoria = c.name; });
+    lsSet('ss_costi_mensili', costi);
+  }
+  render();
+}
+async function delCategoria(kind, id){
+  const key = kind==='spesa' ? 'ss_lista_categorie' : 'ss_costi_categorie';
+  const cats = lsGet(key, []);
+  if(cats.length<=1){ await customAlert('Deve rimanere almeno una categoria.'); return; }
+  const c = cats.find(x=>x.id===id);
+  if(!c) return;
+  if(!(await customConfirm(`Eliminare la categoria "${c.name}"? Gli elementi che la usano diventeranno "Altro".`))) return;
+  const rimasti = cats.filter(x=>x.id!==id);
+  if(!rimasti.some(x=>x.name==='Altro')) rimasti.push({id:uid(), name:'Altro', icon:'📦'});
+  lsSet(key, rimasti);
+  if(kind==='spesa'){
+    const items = lsGet('ss_lista_items', []);
+    items.forEach(i=>{ if(i.category===c.name) i.category = 'Altro'; });
+    lsSet('ss_lista_items', items);
+  } else {
+    const costi = lsGet('ss_costi_mensili', []);
+    costi.forEach(x=>{ if(x.categoria===c.name) x.categoria = 'Altro'; });
+    lsSet('ss_costi_mensili', costi);
+  }
+  render();
+}
+
+/* ---------- Supermercati (gestiti da Impostazioni) ---------- */
+function renderSupermercatiEditor(){
+  const sup = ensureDefaultSupermercati();
+  let html = `<div class="list-spacer"></div><div class="card" style="padding:0;">`;
+  sup.forEach(s=>{
+    html += `<div class="cc-row">
+      <span class="ls-cat-icon">🏬</span>
+      <div class="cc-row-name">${escapeHtml(s.nome)}</div>
+      <button class="edit" onclick="editSupermercato('${s.id}')">✏️</button>
+      <button class="del" onclick="delSupermercato('${s.id}')">🗑️</button>
+    </div>`;
+  });
+  html += `</div>`;
+  html += `
+    <div class="card">
+      <label>Nuovo supermercato</label>
+      <input type="text" id="newsuper_nome" placeholder="Es. Todis" onkeydown="if(event.key==='Enter') addSupermercato()">
+      <button class="btn block" onclick="addSupermercato()">➕ Aggiungi supermercato</button>
+    </div>
+  `;
+  return html;
+}
+function addSupermercato(){
+  const nomeEl = document.getElementById('newsuper_nome');
+  const nome = nomeEl.value.trim();
+  if(!nome){ customAlert('Inserisci il nome del supermercato.'); return; }
+  const sup = ensureDefaultSupermercati();
+  if(sup.some(s=>s.nome.toLowerCase()===nome.toLowerCase())){ customAlert('Esiste già un supermercato con questo nome.'); return; }
+  sup.push({id:uid(), nome});
+  lsSet('ss_supermercati', sup);
+  render();
+}
+async function editSupermercato(id){
+  const sup = ensureDefaultSupermercati();
+  const s = sup.find(x=>x.id===id);
+  if(!s) return;
+  const nome = await promptModal({title:'Modifica supermercato', value:s.nome, okText:'Salva'});
+  if(nome===null || nome.trim()==='') return;
+  const oldNome = s.nome;
+  s.nome = nome.trim();
+  lsSet('ss_supermercati', sup);
+  const storico = lsGet('ss_lista_storico', []);
+  storico.forEach(x=>{ if(x.supermercato===oldNome) x.supermercato = s.nome; });
+  lsSet('ss_lista_storico', storico);
+  render();
+}
+async function delSupermercato(id){
+  const sup = ensureDefaultSupermercati();
+  if(sup.length<=1){ await customAlert('Deve rimanere almeno un supermercato.'); return; }
+  const s = sup.find(x=>x.id===id);
+  if(!s) return;
+  if(!(await customConfirm(`Eliminare "${s.nome}"? Le spese passate che lo indicano resteranno con questo nome, ma non potrai più selezionarlo per nuove spese.`))) return;
+  const rimasti = sup.filter(x=>x.id!==id);
+  lsSet('ss_supermercati', rimasti);
+  render();
+}
+
+/* ---------- COSTI MENSILI ---------- */
+function renderCostiMensili(){
+  const costi = lsGet('ss_costi_mensili', []).filter(c=>c.attivo!==false);
+  const pagamenti = lsGet('ss_costi_pagamenti', []);
+  const categorie = ensureDefaultCostiCategorie();
+  const mese = state.costiMese;
+
+  let html = `
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+      <button class="chev-btn" onclick="cambiaMeseCosti(-1)">‹ Prec</button>
+      <div style="font-weight:800; font-size:15.5px;">${monthLabel(mese)}</div>
+      <button class="chev-btn" onclick="cambiaMeseCosti(1)">Succ ›</button>
+    </div>
+  `;
+  html += `<div class="fab-row" style="margin-top:0;"><button class="btn block" onclick="navigate('costo_form', {editCostoId:null})">➕ Nuovo costo</button></div>`;
+  html += `<div class="fab-row" style="margin-top:0;"><button class="btn secondary block" onclick="navigate('storico_spesa', {editStoricoId:null})">📜 Storico spese (supermercato)</button></div>`;
+  if(costi.length===0){
+    html += `<div class="empty">Nessun costo mensile impostato. Tocca "Nuovo costo" qui sopra. 💶</div>`;
+    return html;
+  }
+  let totalePrevisto = 0, totalePagato = 0;
+  const rows = costi.map(c=>{
+    const pag = pagamenti.find(p=>p.costoId===c.id && p.mese===mese);
+    totalePrevisto += Number(c.importo)||0;
+    if(pag) totalePagato += Number(pag.importo)||0;
+    return {c, pag};
+  });
+  html += `<div class="card"><div class="stat-row">
+    <div class="stat"><div class="n">${euro(totalePrevisto)}</div><div class="l">Previsto</div></div>
+    <div class="stat"><div class="n">${euro(totalePagato)}</div><div class="l">Pagato</div></div>
+  </div></div>`;
+
+  rows.forEach(({c,pag})=>{
+    html += `<div class="checkitem ${pag?'done':''}" onclick="toggleSegnaPagato('${c.id}')">
+      <div class="check-circle">${pag?'✓':''}</div>
+      <span class="ls-cat-icon">${iconaPerCategoria(c.categoria, categorie)}</span>
+      <div class="label">
+        <div>${escapeHtml(c.nome)}</div>
+        <div style="font-size:12px; color:var(--muted);">${escapeHtml(c.categoria)} · ${euro(pag?pag.importo:c.importo)}${pag?' pagato':' previsto'}</div>
+      </div>
+      <button class="edit" onclick="event.stopPropagation(); navigate('costo_form', {editCostoId:'${c.id}'})">✏️</button>
+      <button class="del" onclick="event.stopPropagation(); delCosto('${c.id}')">🗑️</button>
+    </div>`;
+  });
+  return html;
+}
+function cambiaMeseCosti(delta){ state.costiMese = addMonths(state.costiMese, delta); render(); }
+async function toggleSegnaPagato(costoId){
+  const pagamenti = lsGet('ss_costi_pagamenti', []);
+  const idx = pagamenti.findIndex(p=>p.costoId===costoId && p.mese===state.costiMese);
+  if(idx>=0){
+    if(!(await customConfirm('Segnare questo costo come non ancora pagato per questo mese?'))) return;
+    pagamenti.splice(idx,1);
+    lsSet('ss_costi_pagamenti', pagamenti);
+    render();
+    return;
+  }
+  const costi = lsGet('ss_costi_mensili', []);
+  const c = costi.find(x=>x.id===costoId);
+  if(!c) return;
+  const importoStr = await promptModal({
+    title:'Segna come pagato', hint:`Importo effettivo per ${monthLabel(state.costiMese)}`,
+    value:String(c.importo), type:'number', okText:'Conferma'
+  });
+  if(importoStr===null) return;
+  const importo = Math.max(0, parseFloat(importoStr.replace(',','.'))||0);
+  pagamenti.push({id:uid(), costoId, mese:state.costiMese, importo, data:todayStr()});
+  lsSet('ss_costi_pagamenti', pagamenti);
+  render();
+}
+function renderCostoForm(){
+  const categorie = ensureDefaultCostiCategorie();
+  const costi = lsGet('ss_costi_mensili', []);
+  const editing = state.editCostoId ? costi.find(c=>c.id===state.editCostoId) : null;
+  return `
+    <div class="card">
+      <label>Nome del costo</label>
+      <input type="text" id="cf_nome" value="${editing?escapeHtml(editing.nome):''}" placeholder="Es. Bolletta luce">
+      <label>Categoria</label>
+      <select id="cf_cat">
+        ${categorie.map(c=>`<option value="${escapeHtml(c.name)}" ${editing && editing.categoria===c.name?'selected':''}>${c.icon} ${escapeHtml(c.name)}</option>`).join('')}
+      </select>
+      <label>Importo previsto (€)</label>
+      <input type="number" step="0.01" inputmode="decimal" id="cf_importo" value="${editing?editing.importo:''}" placeholder="Es. 35.00">
+      <label>Giorno del mese (opzionale)</label>
+      <input type="number" min="1" max="31" id="cf_giorno" value="${editing && editing.giorno ? editing.giorno : ''}" placeholder="Es. 15">
+      <div class="row">
+        <div style="flex:1;"><button class="btn secondary block" onclick="goBack()">Annulla</button></div>
+        <div style="flex:1;"><button class="btn block" onclick="saveCosto()">Salva</button></div>
+      </div>
+    </div>
+  `;
+}
+function saveCosto(){
+  const nome = document.getElementById('cf_nome').value.trim();
+  if(!nome){ customAlert('Inserisci un nome per il costo.'); return; }
+  const categoria = document.getElementById('cf_cat').value;
+  const importo = Math.max(0, parseFloat(document.getElementById('cf_importo').value.replace(',','.'))||0);
+  const giornoRaw = document.getElementById('cf_giorno').value;
+  const giorno = giornoRaw ? Math.min(31, Math.max(1, parseInt(giornoRaw,10))) : null;
+  const costi = lsGet('ss_costi_mensili', []);
+  if(state.editCostoId){
+    const c = costi.find(x=>x.id===state.editCostoId);
+    if(c){ c.nome=nome; c.categoria=categoria; c.importo=importo; c.giorno=giorno; }
+  } else {
+    costi.push({id:uid(), nome, categoria, importo, giorno, attivo:true});
+  }
+  lsSet('ss_costi_mensili', costi);
+  goBack();
+}
+async function delCosto(id){
+  if(!(await customConfirm('Eliminare questo costo mensile? Verranno rimossi anche i pagamenti registrati.'))) return;
+  let costi = lsGet('ss_costi_mensili', []);
+  costi = costi.filter(c=>c.id!==id);
+  lsSet('ss_costi_mensili', costi);
+  let pagamenti = lsGet('ss_costi_pagamenti', []);
+  pagamenti = pagamenti.filter(p=>p.costoId!==id);
+  lsSet('ss_costi_pagamenti', pagamenti);
+  render();
+}
+
+/* ---------- GRAFICI ---------- */
+function getGraficiPeriodo(){ try{ return localStorage.getItem('ss_grafici_periodo') || '6m'; }catch(e){ return '6m'; } }
+function setGraficiPeriodo(v){ try{ localStorage.setItem('ss_grafici_periodo', v); }catch(e){} render(); }
+
+function renderGrafici(){
+  const periodo = getGraficiPeriodo();
+  return `
+    <div class="period-toggle">
+      <button class="period-btn ${periodo==='3m'?'active':''}" onclick="setGraficiPeriodo('3m')">Ultimi 3 mesi</button>
+      <button class="period-btn ${periodo==='6m'?'active':''}" onclick="setGraficiPeriodo('6m')">Ultimi 6 mesi</button>
+      <button class="period-btn ${periodo==='12m'?'active':''}" onclick="setGraficiPeriodo('12m')">Ultimo anno</button>
+    </div>
+    <div class="chart-title">Andamento mensile: spesa vs costi fissi</div>
+    <div class="card"><div class="chart-wrap"><canvas id="chartAndamento"></canvas></div></div>
+    <div class="chart-title">Ripartizione per categoria (${monthLabel(monthKey())})</div>
+    <div class="card"><div class="chart-wrap"><canvas id="chartCategorie"></canvas></div></div>
+    <div class="chart-title">Costi fissi per categoria (periodo selezionato)</div>
+    <div class="card"><div class="chart-wrap"><canvas id="chartCostiCat"></canvas></div></div>
+    <div class="chart-title">Dove spendi di più: spesa per supermercato (periodo selezionato)</div>
+    <div class="card"><div class="chart-wrap"><canvas id="chartSupermercati"></canvas></div></div>
+  `;
+}
+function nMonthsFromPeriodo(p){ return p==='3m'?3 : p==='12m'?12 : 6; }
+function drawGrafici(){
+  graficiChartInstances.forEach(ch=>{ try{ ch.destroy(); }catch(e){} });
+  graficiChartInstances = [];
+  if(typeof Chart === 'undefined') return;
+
+  const periodo = getGraficiPeriodo();
+  const n = nMonthsFromPeriodo(periodo);
+  const nowMk = monthKey();
+  const months = [];
+  for(let i=n-1;i>=0;i--) months.push(addMonths(nowMk, -i));
+
+  const storico = lsGet('ss_lista_storico', []);
+  const pagamenti = lsGet('ss_costi_pagamenti', []);
+
+  const speseArr = months.map(mk => {
+    return storico.filter(s => s.data && s.data.slice(0,7)===mk && s.importo!=null)
+      .reduce((sum,s)=>sum+(Number(s.importo)||0), 0);
+  });
+  const costiArr = months.map(mk => {
+    return pagamenti.filter(p=>p.mese===mk).reduce((sum,p)=>sum+(Number(p.importo)||0), 0);
+  });
+
+  const c1 = document.getElementById('chartAndamento');
+  if(c1){
+    graficiChartInstances.push(new Chart(c1, {
+      type:'bar',
+      data:{
+        labels: months.map(monthLabel),
+        datasets:[
+          {label:'Lista della spesa', data:speseArr, backgroundColor:'#e8834a'},
+          {label:'Costi fissi', data:costiArr, backgroundColor:'#5b8def'}
+        ]
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{position:'bottom', labels:{boxWidth:12, font:{size:11}}}},
+        scales:{ y:{ beginAtZero:true, ticks:{ callback:v=>'€'+v } } }
+      }
+    }));
+  }
+
+  // Ripartizione per categoria (mese corrente): costi per categoria + spesa lista come voce unica
+  const categorieCosti = ensureDefaultCostiCategorie();
+  const costiQuestoMese = pagamenti.filter(p=>p.mese===nowMk);
+  const costiDef = lsGet('ss_costi_mensili', []);
+  const catTotals = {};
+  costiQuestoMese.forEach(p=>{
+    const def = costiDef.find(c=>c.id===p.costoId);
+    const cat = def ? def.categoria : 'Altro';
+    catTotals[cat] = (catTotals[cat]||0) + (Number(p.importo)||0);
+  });
+  const speseQuestoMese = storico.filter(s=>s.data && s.data.slice(0,7)===nowMk && s.importo!=null)
+    .reduce((sum,s)=>sum+(Number(s.importo)||0), 0);
+  if(speseQuestoMese>0) catTotals['Lista della spesa'] = speseQuestoMese;
+
+  const c2 = document.getElementById('chartCategorie');
+  const catLabels = Object.keys(catTotals);
+  if(c2){
+    if(catLabels.length===0){
+      c2.parentElement.innerHTML = '<div class="empty">Ancora nessun dato per questo mese.</div>';
+    } else {
+      graficiChartInstances.push(new Chart(c2, {
+        type:'pie',
+        data:{
+          labels:catLabels,
+          datasets:[{ data:catLabels.map(l=>catTotals[l]), backgroundColor:catLabels.map(l=>colorePerCategoria(l)==='#eceef1'?'#c9ccd1':colorePerCategoria(l).replace('#f','#e')) }]
+        },
+        options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom', labels:{boxWidth:12, font:{size:11}}}} }
+      }));
+    }
+  }
+
+  // Costi fissi per categoria nel periodo selezionato
+  const pagPeriodo = pagamenti.filter(p=>months.includes(p.mese));
+  const catPeriodo = {};
+  pagPeriodo.forEach(p=>{
+    const def = costiDef.find(c=>c.id===p.costoId);
+    const cat = def ? def.categoria : 'Altro';
+    catPeriodo[cat] = (catPeriodo[cat]||0) + (Number(p.importo)||0);
+  });
+  const c3 = document.getElementById('chartCostiCat');
+  const catPLabels = Object.keys(catPeriodo);
+  if(c3){
+    if(catPLabels.length===0){
+      c3.parentElement.innerHTML = '<div class="empty">Nessun costo pagato nel periodo selezionato.</div>';
+    } else {
+      graficiChartInstances.push(new Chart(c3, {
+        type:'bar',
+        data:{ labels:catPLabels, datasets:[{ label:'Totale', data:catPLabels.map(l=>catPeriodo[l]), backgroundColor:catPLabels.map(l=>colorePerCategoria(l).replace('#f','#e')) }] },
+        options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{ beginAtZero:true, ticks:{ callback:v=>'€'+v } } } }
+      }));
+    }
+  }
+
+  // Spesa per supermercato nel periodo selezionato (solo spese con importo registrato)
+  const speseConSuper = storico.filter(s => months.includes((s.data||'').slice(0,7)) && s.importo!=null);
+  const superTotals = {};
+  speseConSuper.forEach(s=>{
+    const nome = s.supermercato || 'Non specificato';
+    superTotals[nome] = (superTotals[nome]||0) + (Number(s.importo)||0);
+  });
+  const c4 = document.getElementById('chartSupermercati');
+  const superLabels = Object.keys(superTotals).sort((a,b)=>superTotals[b]-superTotals[a]);
+  if(c4){
+    if(superLabels.length===0){
+      c4.parentElement.innerHTML = '<div class="empty">Nessuna spesa con importo registrato nel periodo selezionato.</div>';
+    } else {
+      graficiChartInstances.push(new Chart(c4, {
+        type:'bar',
+        data:{ labels:superLabels, datasets:[{ label:'Totale speso', data:superLabels.map(l=>superTotals[l]), backgroundColor:'#e8834a' }] },
+        options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{ beginAtZero:true, ticks:{ callback:v=>'€'+v } } } }
+      }));
+    }
+  }
+}
+
+/* ---------- IMPOSTAZIONI ---------- */
+function renderImpostazioni(){
+  return `
+    <div class="list-spacer"></div>
+    <div class="card" style="cursor:pointer;" onclick="showChangelogModal()">
+      <div class="row" style="justify-content:space-between; align-items:center; margin-top:0;">
+        <div class="title" style="margin:0;">Versione in uso: ${APP_VERSION}</div>
+        <span class="chev">›</span>
+      </div>
+      <div class="body">Tocca per vedere la cronologia degli aggiornamenti</div>
+    </div>
+    <div class="card" style="cursor:pointer;" onclick="navigate('cat_editor', {editCatKind:'spesa'})">
+      <div class="row" style="justify-content:space-between; align-items:center; margin-top:0;">
+        <div class="title" style="margin:0;">🛒 Categorie lista spesa</div>
+        <span class="chev">›</span>
+      </div>
+      <div class="body">Gestisci le categorie della lista della spesa</div>
+    </div>
+    <div class="card" style="cursor:pointer;" onclick="navigate('cat_editor', {editCatKind:'costi'})">
+      <div class="row" style="justify-content:space-between; align-items:center; margin-top:0;">
+        <div class="title" style="margin:0;">💶 Categorie costi mensili</div>
+        <span class="chev">›</span>
+      </div>
+      <div class="body">Gestisci le categorie dei costi mensili</div>
+    </div>
+    <div class="card" style="cursor:pointer;" onclick="navigate('catalogo_gestione', {editCatId:null, catGestioneSearch:''})">
+      <div class="row" style="justify-content:space-between; align-items:center; margin-top:0;">
+        <div class="title" style="margin:0;">📚 Catalogo articoli</div>
+        <span class="chev">›</span>
+      </div>
+      <div class="body">Aggiungi, rinomina o elimina i prodotti disponibili per l'aggiunta rapida alla lista</div>
+    </div>
+    <div class="card" style="cursor:pointer;" onclick="navigate('supermercati_editor')">
+      <div class="row" style="justify-content:space-between; align-items:center; margin-top:0;">
+        <div class="title" style="margin:0;">🏬 Supermercati</div>
+        <span class="chev">›</span>
+      </div>
+      <div class="body">Gestisci l'elenco dei supermercati tra cui scegliere quando chiudi la spesa</div>
+    </div>
+    <div class="card">
+      <div class="title" style="margin-top:0;">💾 Backup dati</div>
+      <div class="body">I dati sono condivisi e sincronizzati automaticamente con chi accede con lo stesso account. Puoi comunque esportare un backup locale, o importarne uno.</div>
+      <div class="row">
+        <div style="flex:1;"><button class="btn secondary block" onclick="exportBackup()">⬇️ Esporta</button></div>
+        <div style="flex:1;"><button class="btn secondary block" onclick="document.getElementById('importFile').click()">⬆️ Importa</button></div>
+      </div>
+      <input type="file" id="importFile" accept="application/json" class="hidden" onchange="importBackup(this.files[0])">
+    </div>
+    <div class="card">
+      <div class="title" style="margin-top:0;">🗑️ Reset dati</div>
+      <div class="body">Cancella tutti i dati salvati su questo telefono (lista spesa, storico, costi mensili, categorie).</div>
+      <button class="btn danger block" style="margin-top:12px;" onclick="resetDati()">Cancella tutti i dati</button>
+    </div>
+  `;
+}
+function exportBackup(){
+  const keys = ['ss_lista_items','ss_lista_categorie','ss_lista_storico','ss_costi_mensili','ss_costi_categorie','ss_costi_pagamenti','ss_catalogo_articoli','ss_supermercati'];
+  const data = {};
+  keys.forEach(k => data[k] = lsGet(k, null));
+  data._exportedAt = new Date().toISOString();
+  data._appVersion = APP_VERSION;
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'backup-spesa-costi-' + todayStr() + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 2000);
+}
+function importBackup(file){
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    try{
+      const data = JSON.parse(reader.result);
+      if(!(await customConfirm('Importare questo backup? I dati attuali salvati su questo telefono verranno sovrascritti.'))) return;
+      Object.keys(data).forEach(k=>{
+        if(k.startsWith('_')) return;
+        if(data[k] !== null) lsSet(k, data[k]);
+      });
+      await customAlert('Backup importato con successo.');
+      goHome();
+    }catch(e){
+      await customAlert('File non valido. Assicurati di scegliere un backup esportato da questa app.');
+    }
+  };
+  reader.readAsText(file);
+}
+async function resetDati(){
+  if(!(await customConfirm("Cancellare davvero tutti i dati (anche per chi condivide l'app con te)? L'operazione non è reversibile."))) return;
+  await Promise.all(DATA_KEYS.map(async k => {
+    delete _cache[k];
+    try{ await db.collection(COLLECTION).doc(k).delete(); }catch(e){ console.error('reset delete failed', k, e); }
+  }));
+  ensureDefaultListaCategorie();
+  ensureDefaultCostiCategorie();
+  await customAlert('Tutti i dati sono stati cancellati.');
+  goHome();
+}
+
+/* ---------- Avvio ---------- */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      // Controlla subito se c'è una versione più recente di sw.js sul server
+      // (bypassando la cache HTTP grazie a {cache:'reload'} dentro sw.js),
+      // invece di aspettare passivamente il controllo periodico del browser.
+      reg.update().catch(()=>{});
+      // Se durante questa sessione arriva un service worker nuovo e prende il
+      // controllo della pagina, ricarica automaticamente per mostrare la nuova versione.
+      let refreshed = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if(refreshed) return;
+        refreshed = true;
+        window.location.reload();
+      });
+    }).catch(()=>{});
+  });
+}
+document.getElementById('creditsVersione').textContent = APP_VERSION;
+
+// Nasconde la schermata di avvio quando l'animazione è finita E sappiamo se sei già loggato,
+// poi mostra login o app di conseguenza.
+(function(){
+  const splash = document.getElementById('splash');
+  const MIN_DISPLAY_MS = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 300 : 1650;
+  let minElapsed = false;
+  function maybeFinishSplash(){
+    if(_splashDone || !minElapsed || !_authKnown) return;
+    _splashDone = true;
+    if(splash){
+      splash.classList.add('hide');
+      setTimeout(() => splash.remove(), 550);
+    }
+    if(_authUser) showAppRoot(); else showLoginScreen();
+  }
+  setTimeout(() => { minElapsed = true; maybeFinishSplash(); }, MIN_DISPLAY_MS);
+  window._maybeFinishSplash = maybeFinishSplash;
+})();
+auth.onAuthStateChanged(user => {
+  _authUser = user; _authKnown = true;
+  if(!_splashDone){ window._maybeFinishSplash(); return; }
+  if(user) showAppRoot(); else showLoginScreen();
+});
+</script>
+</body>
+</html>
