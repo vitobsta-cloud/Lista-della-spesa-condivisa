@@ -315,8 +315,10 @@
 /* =========================================================
    Spesa & Costi — app locale, offline-first (localStorage)
    ========================================================= */
-const APP_VERSION = 'v3.5';
+const APP_VERSION = 'v3.7';
 const CHANGELOG = [
+  {v:'v3.7', note:'L\'avviso "chi ha fatto cosa" ora avvisa anche quando l\'altra persona chiude la spesa (anche solo in parte): vedrai un messaggio tipo "Marco ha chiuso la spesa (5 articoli, 12,50€)" la prossima volta che apri l\'app.'},
+  {v:'v3.6', note:'Corretto un bug per cui, riaprendo l\'app offline dopo averla chiusa, la lista poteva risultare vuota anche se prima (online) si vedeva. Ora i dati vengono sempre salvati anche in una copia di sicurezza locale sul telefono, indipendente dalla cache automatica di Firestore, così sopravvivono sempre alla chiusura dell\'app.'},
   {v:'v3.5', note:'La dimensione del testo nel catalogo articoli ora si imposta con un numero preciso in px (da 10 a 32), invece di tre taglie fisse. Aggiunta anche la possibilità di scegliere lo spessore del carattere (da Normale a Molto grassetto).'},
   {v:'v3.4', note:'Il pulsante "Aggiungi dal catalogo articoli" ora è più evidente. Aggiunta in Impostazioni la possibilità di scegliere la dimensione del testo dentro il catalogo articoli (Normale/Grande/Molto grande) — è una preferenza personale, resta solo sul tuo telefono.'},
   {v:'v3.3', note:'Corretto un altro caso in cui l\'app restava con lo schermo vuoto per un paio di secondi all\'avvio offline: ora la schermata Home compare subito, e i dati arrivano subito dopo senza bloccare nulla.'},
@@ -362,6 +364,17 @@ const DATA_KEYS = ['ss_lista_items','ss_lista_categorie','ss_lista_storico','ss_
 
 db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
 
+function fbBackupKey(key){ return 'ss_fbcache_' + key; }
+function readLocalBackup(key, fallback){
+  try{
+    const raw = localStorage.getItem(fbBackupKey(key));
+    if(raw === null) return fallback;
+    return JSON.parse(raw);
+  }catch(e){ return fallback; }
+}
+function writeLocalBackup(key, value){
+  try{ localStorage.setItem(fbBackupKey(key), JSON.stringify(value)); }catch(e){}
+}
 async function sGet(key, fallback){
   const TIMEOUT_MS = 2500;
   try{
@@ -373,32 +386,42 @@ async function sGet(key, fallback){
       const snap = result;
       if(snap.exists){
         const data = snap.data();
-        return data && data.value !== undefined ? data.value : fallback;
+        const value = data && data.value !== undefined ? data.value : fallback;
+        writeLocalBackup(key, value);
+        return value;
       }
       return fallback;
     }
-    // Tempo scaduto (probabilmente offline): prova direttamente la cache locale, senza aspettare oltre.
+    // Tempo scaduto (probabilmente offline): prova la cache di Firestore, poi la copia di sicurezza locale.
     try{
       const snapCache = await db.collection(COLLECTION).doc(key).get({source:'cache'});
       if(snapCache.exists){
         const data = snapCache.data();
-        return data && data.value !== undefined ? data.value : fallback;
+        const value = data && data.value !== undefined ? data.value : fallback;
+        writeLocalBackup(key, value);
+        return value;
       }
     }catch(e2){}
-    return fallback;
+    return readLocalBackup(key, fallback);
   }catch(e){
     try{
       const snapCache = await db.collection(COLLECTION).doc(key).get({source:'cache'});
       if(snapCache.exists){
         const data = snapCache.data();
-        return data && data.value !== undefined ? data.value : fallback;
+        const value = data && data.value !== undefined ? data.value : fallback;
+        writeLocalBackup(key, value);
+        return value;
       }
     }catch(e2){}
     console.error('firestore get failed', key, e);
-    return fallback;
+    return readLocalBackup(key, fallback);
   }
 }
 async function sSet(key, value){
+  // Scritta subito in una copia di sicurezza locale (localStorage), indipendente dalla cache
+  // "automatica" di Firestore: così, anche se quest'ultima non fosse disponibile su questo
+  // telefono/browser, i dati sopravvivono comunque quando l'app viene riaperta offline.
+  writeLocalBackup(key, value);
   try{
     await db.collection(COLLECTION).doc(key).set({
       value, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -433,6 +456,7 @@ function watchAllKeys(){
       if(snap.exists){
         const data = snap.data();
         _cache[key] = data && data.value !== undefined ? data.value : _cache[key];
+        writeLocalBackup(key, _cache[key]);
       }
       if(isTypingInForm()) return;
       if(key === 'activity_log') checkNewActivity();
@@ -504,12 +528,12 @@ function getLastSeenActivity(){
 function setLastSeenActivity(ts){
   try{ localStorage.setItem('ss_last_seen_activity', String(ts)); }catch(e){}
 }
-async function logActivity(testo){
+async function logActivity(testo, tipo){
   const user = getDeviceName();
   if(!user) return;
   try{
     const log = lsGet('activity_log', []);
-    log.push({id:uid(), user, testo, ts: Date.now()});
+    log.push({id:uid(), user, testo, tipo: tipo || 'aggiunta', ts: Date.now()});
     lsSet('activity_log', log.slice(-150));
   }catch(e){ console.error('logActivity failed', e); }
 }
@@ -522,14 +546,19 @@ function checkNewActivity(){
   if(nuovi.length > 0){
     const perUser = {};
     nuovi.forEach(a=>{
-      if(!perUser[a.user]) perUser[a.user] = [];
-      perUser[a.user].push(a.testo);
+      if(!perUser[a.user]) perUser[a.user] = {aggiunte:[], chiusure:[]};
+      if(a.tipo === 'chiusura') perUser[a.user].chiusure.push(a.testo);
+      else perUser[a.user].aggiunte.push(a.testo);
     });
-    const messaggio = Object.entries(perUser).map(([user, testi])=>{
-      const elenco = testi.slice(0,5).join(', ') + (testi.length>5 ? ` e altre ${testi.length-5}` : '');
-      return `${user} ha aggiunto: ${elenco}`;
-    }).join('\n');
-    showActivityToast(messaggio);
+    const righe = [];
+    Object.entries(perUser).forEach(([user, {aggiunte, chiusure}])=>{
+      if(aggiunte.length > 0){
+        const elenco = aggiunte.slice(0,5).join(', ') + (aggiunte.length>5 ? ` e altre ${aggiunte.length-5}` : '');
+        righe.push(`${user} ha aggiunto: ${elenco}`);
+      }
+      chiusure.forEach(c => righe.push(`${user} ha chiuso la spesa (${c})`));
+    });
+    showActivityToast(righe.join('\n'));
   }
   const maxTs = log.reduce((m,a)=>Math.max(m,a.ts), lastSeen);
   setLastSeenActivity(maxTs);
@@ -1075,6 +1104,10 @@ async function chiudiSpesa(){
   lsSet('ss_lista_storico', storico.slice(-500));
   const restanti = items.filter(i=>!i.done);
   lsSet('ss_lista_items', restanti);
+  const dettaglioAttivita = importo!=null
+    ? `${acquistati.length} articoli, ${euro(importo)}`
+    : `${acquistati.length} articoli`;
+  logActivity(dettaglioAttivita, 'chiusura');
   render();
 }
 
