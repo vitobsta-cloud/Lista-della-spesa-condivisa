@@ -315,8 +315,9 @@
 /* =========================================================
    Spesa & Costi — app locale, offline-first (localStorage)
    ========================================================= */
-const APP_VERSION = 'v3.8';
+const APP_VERSION = 'v3.9';
 const CHANGELOG = [
+  {v:'v3.9', note:'Aggiunto il campo "Chi ha fatto la spesa" nello storico: si compila da solo col tuo nome quando chiudi la spesa, e si può cambiare in "Insieme", nel nome dell\'altra persona, o scriverne uno nuovo. Ora compare anche nell\'elenco della cronologia.'},
   {v:'v3.8', note:'Aggiunta la "Cronologia spese" anche come riquadro diretto nella Home, oltre che dentro la lista della spesa. Chiudere la spesa ora è più veloce: c\'è un pulsante "⚡ Chiudi spesa" che chiude subito senza fare domande (utile quando si ha fretta), e uno "📝 Con dettagli" per chi vuole registrare importo, pagamento e supermercato. Le spese chiuse al volo si possono sempre completare più tardi toccandole nella Cronologia.'},
   {v:'v3.7', note:'L\'avviso "chi ha fatto cosa" ora avvisa anche quando l\'altra persona chiude la spesa (anche solo in parte): vedrai un messaggio tipo "Marco ha chiuso la spesa (5 articoli, 12,50€)" la prossima volta che apri l\'app.'},
   {v:'v3.6', note:'Corretto un bug per cui, riaprendo l\'app offline dopo averla chiusa, la lista poteva risultare vuota anche se prima (online) si vedeva. Ora i dati vengono sempre salvati anche in una copia di sicurezza locale sul telefono, indipendente dalla cache automatica di Firestore, così sopravvivono sempre alla chiusura dell\'app.'},
@@ -1077,7 +1078,7 @@ async function chiudiSpesaVeloce(){
   const acquistati = items.filter(i=>i.done);
   if(acquistati.length===0){ await customAlert('Non ci sono ancora articoli spuntati come acquistati.'); return; }
   const storico = lsGet('ss_lista_storico', []);
-  storico.push({id:uid(), data:todayStr(), articoli:acquistati.length, importo:null, pagamento:null, supermercato:null});
+  storico.push({id:uid(), data:todayStr(), articoli:acquistati.length, importo:null, pagamento:null, supermercato:null, autore:getDeviceName()||null});
   lsSet('ss_lista_storico', storico.slice(-500));
   const restanti = items.filter(i=>!i.done);
   lsSet('ss_lista_items', restanti);
@@ -1117,7 +1118,7 @@ async function chiudiSpesa(){
   });
   const supermercato = sceltaSuper || null;
   const storico = lsGet('ss_lista_storico', []);
-  storico.push({id:uid(), data:todayStr(), articoli:acquistati.length, importo, pagamento, supermercato});
+  storico.push({id:uid(), data:todayStr(), articoli:acquistati.length, importo, pagamento, supermercato, autore:getDeviceName()||null});
   lsSet('ss_lista_storico', storico.slice(-500));
   const restanti = items.filter(i=>!i.done);
   lsSet('ss_lista_items', restanti);
@@ -1129,6 +1130,15 @@ async function chiudiSpesa(){
 }
 
 /* ---------- Storico spese (visualizza / modifica / elimina) ---------- */
+function getKnownAuthors(){
+  const set = new Set();
+  const me = getDeviceName();
+  if(me) set.add(me);
+  (lsGet('activity_log', [])||[]).forEach(a=>{ if(a.user) set.add(a.user); });
+  (lsGet('ss_lista_storico', [])||[]).forEach(s=>{ if(s.autore) set.add(s.autore); });
+  set.add('Insieme');
+  return Array.from(set);
+}
 function formatDataIt(d){
   if(!d) return '';
   const [y,m,day] = d.split('-');
@@ -1150,7 +1160,9 @@ function renderStoricoSpesa(){
       html += renderStoricoEditForm(s);
     } else {
       const importoTxt = s.importo!=null ? euro(s.importo) : '—';
-      const dettPezzi = [`${s.articoli} articoli`];
+      const dettPezzi = [];
+      if(s.autore) dettPezzi.push(`👤 ${escapeHtml(s.autore)}`);
+      dettPezzi.push(`${s.articoli} articoli`);
       if(s.supermercato) dettPezzi.push(`🏬 ${escapeHtml(s.supermercato)}`);
       dettPezzi.push(s.importo!=null ? `${pagamentoIcona(s.pagamento)} ${escapeHtml(s.pagamento||'Contanti')}` : 'importo non registrato');
       const dettaglio = dettPezzi.join(' · ');
@@ -1166,6 +1178,21 @@ function renderStoricoSpesa(){
   });
   return html;
 }
+async function handleAutoreChange(selectEl){
+  if(selectEl.value === '__altro__'){
+    const nome = await promptModal({title:'Chi ha fatto la spesa?', placeholder:'Es. Marco', okText:'Fatto'});
+    if(nome && nome.trim()){
+      const opt = document.createElement('option');
+      opt.value = nome.trim();
+      opt.textContent = nome.trim();
+      opt.selected = true;
+      selectEl.insertBefore(opt, selectEl.lastElementChild);
+    } else {
+      selectEl.value = selectEl.dataset.prev || '';
+    }
+  }
+  selectEl.dataset.prev = selectEl.value;
+}
 function renderStoricoEditForm(s){
   const opzioni = ['Contanti','Buoni spesa','Pagamento elettronico'];
   const supermercati = ensureDefaultSupermercati();
@@ -1174,6 +1201,13 @@ function renderStoricoEditForm(s){
       <div class="title" style="margin:0;">Modifica spesa</div>
       <button class="del" onclick="state.editStoricoId=null; render();">✕</button>
     </div>
+    <label>Chi ha fatto la spesa</label>
+    <select id="st_autore_${s.id}" data-prev="${escapeHtml(s.autore||'')}" onchange="handleAutoreChange(this)">
+      <option value="" ${!s.autore?'selected':''}>Non specificato</option>
+      ${getKnownAuthors().map(a=>`<option value="${escapeHtml(a)}" ${s.autore===a?'selected':''}>${escapeHtml(a)}</option>`).join('')}
+      ${(s.autore && !getKnownAuthors().includes(s.autore)) ? `<option value="${escapeHtml(s.autore)}" selected>${escapeHtml(s.autore)}</option>` : ''}
+      <option value="__altro__">Altro (scrivi nome)…</option>
+    </select>
     <label>Data</label>
     <input type="date" id="st_data_${s.id}" value="${s.data||''}">
     <label>Numero articoli</label>
@@ -1205,6 +1239,8 @@ function salvaStorico(id){
   s.pagamento = s.importo!=null ? document.getElementById('st_pag_'+id).value : null;
   const superVal = document.getElementById('st_super_'+id).value;
   s.supermercato = superVal || null;
+  const autoreVal = document.getElementById('st_autore_'+id).value;
+  s.autore = (autoreVal && autoreVal !== '__altro__') ? autoreVal : (s.autore || null);
   lsSet('ss_lista_storico', storico);
   state.editStoricoId = null;
   render();
