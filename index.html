@@ -315,8 +315,9 @@
 /* =========================================================
    Spesa & Costi — app locale, offline-first (localStorage)
    ========================================================= */
-const APP_VERSION = 'v4.1';
+const APP_VERSION = 'v4.2';
 const CHANGELOG = [
+  {v:'v4.2', note:'Aggiunti due grafici nuovi: "Prodotti acquistati per categoria" (quanti articoli comprati per ogni categoria) e "Prodotti più acquistati" (i 10 articoli che tornano più spesso in lista), entrambi calcolati sul periodo selezionato. Funzionano usando l\'elenco articoli delle spese chiuse dalla v4.1 in poi.'},
   {v:'v4.1', note:'Aggiunto "📋 Vedi articoli acquistati" dentro ogni spesa dello storico: apre una schermata con l\'elenco degli articoli comprati in quella spesa, con la possibilità di rimetterli nella lista della spesa o aggiungerli al catalogo per la prossima volta (uno per uno, o tutti insieme). Funziona per le spese chiuse da questa versione in poi; quelle già chiuse prima non hanno il dettaglio articoli salvato.'},
   {v:'v4.0', note:'Quando modifichi una spesa nello storico, ora vedi solo quella (le altre restano nascoste finché non chiudi). Aggiunto anche "📷 Scansiona scontrino": scatta o carica una foto dello scontrino e l\'app prova a leggere da sola l\'importo (e la data) e li inserisce nel modulo — controlla sempre che siano corretti prima di salvare. Richiede una connessione internet la prima volta.'},
   {v:'v3.9', note:'Aggiunto il campo "Chi ha fatto la spesa" nello storico: si compila da solo col tuo nome quando chiudi la spesa, e si può cambiare in "Insieme", nel nome dell\'altra persona, o scriverne uno nuovo. Ora compare anche nell\'elenco della cronologia.'},
@@ -1829,6 +1830,10 @@ function renderGrafici(){
     <div class="card"><div class="chart-wrap"><canvas id="chartAndamento"></canvas></div></div>
     <div class="chart-title">Ripartizione per categoria (${monthLabel(monthKey())})</div>
     <div class="card"><div class="chart-wrap"><canvas id="chartCategorie"></canvas></div></div>
+    <div class="chart-title">📦 Prodotti acquistati per categoria (periodo selezionato)</div>
+    <div class="card"><div class="chart-wrap"><canvas id="chartProdottiCat"></canvas></div></div>
+    <div class="chart-title">🏆 Prodotti più acquistati (periodo selezionato)</div>
+    <div class="card"><div class="chart-wrap"><canvas id="chartProdottiTop"></canvas></div></div>
     <div class="chart-title">Costi fissi per categoria (periodo selezionato)</div>
     <div class="card"><div class="chart-wrap"><canvas id="chartCostiCat"></canvas></div></div>
     <div class="chart-title">Dove spendi di più: spesa per supermercato (periodo selezionato)</div>
@@ -1904,6 +1909,57 @@ function drawGrafici(){
           datasets:[{ data:catLabels.map(l=>catTotals[l]), backgroundColor:catLabels.map(l=>colorePerCategoria(l)==='#eceef1'?'#c9ccd1':colorePerCategoria(l).replace('#f','#e')) }]
         },
         options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom', labels:{boxWidth:12, font:{size:11}}}} }
+      }));
+    }
+  }
+
+  // Prodotti acquistati per categoria + prodotti più acquistati, nel periodo selezionato
+  // (solo le spese chiuse dalla v4.1 in poi hanno l'elenco articoli salvato)
+  const speseConArticoli = storico.filter(s => months.includes((s.data||'').slice(0,7)) && Array.isArray(s.articoliLista) && s.articoliLista.length>0);
+  const prodCatTotals = {};
+  const prodCount = {};
+  speseConArticoli.forEach(s=>{
+    s.articoliLista.forEach(a=>{
+      const cat = a.categoryName || 'Altro';
+      prodCatTotals[cat] = (prodCatTotals[cat]||0) + 1;
+      const nome = (a.text||'').trim();
+      if(!nome) return;
+      const chiave = nome.toLowerCase();
+      if(!prodCount[chiave]) prodCount[chiave] = {label:nome, count:0};
+      prodCount[chiave].count++;
+    });
+  });
+
+  const c2b = document.getElementById('chartProdottiCat');
+  const prodCatLabels = Object.keys(prodCatTotals);
+  if(c2b){
+    if(prodCatLabels.length===0){
+      c2b.parentElement.innerHTML = '<div class="empty">Ancora nessun articolo registrato nel periodo selezionato (funziona per le spese chiuse dalla v4.1 in poi).</div>';
+    } else {
+      graficiChartInstances.push(new Chart(c2b, {
+        type:'pie',
+        data:{
+          labels:prodCatLabels,
+          datasets:[{ data:prodCatLabels.map(l=>prodCatTotals[l]), backgroundColor:prodCatLabels.map(l=>colorePerCategoria(l)==='#eceef1'?'#c9ccd1':colorePerCategoria(l).replace('#f','#e')) }]
+        },
+        options:{
+          responsive:true, maintainAspectRatio:false,
+          plugins:{legend:{position:'bottom', labels:{boxWidth:12, font:{size:11}}}, tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${ctx.parsed} articoli`}}}
+        }
+      }));
+    }
+  }
+
+  const c2c = document.getElementById('chartProdottiTop');
+  const topProdotti = Object.values(prodCount).sort((a,b)=>b.count-a.count).slice(0,10);
+  if(c2c){
+    if(topProdotti.length===0){
+      c2c.parentElement.innerHTML = '<div class="empty">Ancora nessun articolo registrato nel periodo selezionato.</div>';
+    } else {
+      graficiChartInstances.push(new Chart(c2c, {
+        type:'bar',
+        data:{ labels:topProdotti.map(p=>p.label), datasets:[{ label:'Volte acquistato', data:topProdotti.map(p=>p.count), backgroundColor:'#e8834a' }] },
+        options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{ beginAtZero:true, ticks:{ stepSize:1 } } } }
       }));
     }
   }
