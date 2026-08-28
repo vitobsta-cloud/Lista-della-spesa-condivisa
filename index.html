@@ -310,8 +310,9 @@
 /* =========================================================
    Spesa & Costi — app locale, offline-first (localStorage)
    ========================================================= */
-const APP_VERSION = 'v3.1';
+const APP_VERSION = 'v3.2';
 const CHANGELOG = [
+  {v:'v3.2', note:'L\'app ora si apre sempre subito, senza aspettare la conferma della rete: se hai già fatto accesso in passato su questo telefono, entra direttamente coi dati salvati e controlla la connessione dopo, in background. Utile quando sei senza campo, es. dentro un supermercato.'},
   {v:'v3.1', note:'Aggiunta la conferma prima di eliminare un articolo dalla lista della spesa (capitava di cancellarlo per sbaglio col cestino). Aggiunto anche un avviso "chi ha aggiunto cosa": la prima volta l\'app chiede il tuo nome, e da quel momento vedrai un avviso in alto quando l\'altra persona aggiunge qualcosa alla lista.'},
   {v:'v3.0', note:'L\'app ora richiede il login ed è condivisa: i dati non sono più solo sul telefono, ma sincronizzati in tempo reale con chiunque acceda con lo stesso account. Funziona comunque offline: le modifiche fatte senza connessione si sincronizzano da sole appena torna il segnale.'},
   {v:'v2.0', note:'Aggiunta un\'animazione di avvio: il logo si "assembla" pezzo per pezzo quando apri l\'app.'},
@@ -354,12 +355,28 @@ const DATA_KEYS = ['ss_lista_items','ss_lista_categorie','ss_lista_storico','ss_
 db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
 
 async function sGet(key, fallback){
+  const TIMEOUT_MS = 2500;
   try{
-    const snap = await db.collection(COLLECTION).doc(key).get();
-    if(snap.exists){
-      const data = snap.data();
-      return data && data.value !== undefined ? data.value : fallback;
+    const result = await Promise.race([
+      db.collection(COLLECTION).doc(key).get(),
+      new Promise(resolve => setTimeout(()=>resolve('__TIMEOUT__'), TIMEOUT_MS))
+    ]);
+    if(result !== '__TIMEOUT__'){
+      const snap = result;
+      if(snap.exists){
+        const data = snap.data();
+        return data && data.value !== undefined ? data.value : fallback;
+      }
+      return fallback;
     }
+    // Tempo scaduto (probabilmente offline): prova direttamente la cache locale, senza aspettare oltre.
+    try{
+      const snapCache = await db.collection(COLLECTION).doc(key).get({source:'cache'});
+      if(snapCache.exists){
+        const data = snapCache.data();
+        return data && data.value !== undefined ? data.value : fallback;
+      }
+    }catch(e2){}
     return fallback;
   }catch(e){
     try{
@@ -1780,28 +1797,38 @@ if('serviceWorker' in navigator){
 }
 document.getElementById('creditsVersione').textContent = APP_VERSION;
 
-// Nasconde la schermata di avvio quando l'animazione è finita E sappiamo se sei già loggato,
-// poi mostra login o app di conseguenza.
+function markSessionSeen(){ try{ localStorage.setItem('ss_had_session','1'); }catch(e){} }
+function hadSessionBefore(){ try{ return localStorage.getItem('ss_had_session')==='1'; }catch(e){ return false; } }
+
+// Appena finisce l'animazione, l'app si apre SUBITO: se questo telefono ha già fatto login
+// in passato, si entra direttamente usando i dati salvati in locale, senza aspettare
+// alcuna conferma dalla rete. Il vero controllo di accesso/rete avviene dopo, in background,
+// tramite auth.onAuthStateChanged qui sotto: se risulta che il login non è (più) valido,
+// solo allora si passa alla schermata di login.
 (function(){
   const splash = document.getElementById('splash');
   const MIN_DISPLAY_MS = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 300 : 1650;
-  let minElapsed = false;
-  function maybeFinishSplash(){
-    if(_splashDone || !minElapsed || !_authKnown) return;
+  setTimeout(() => {
     _splashDone = true;
     if(splash){
       splash.classList.add('hide');
       setTimeout(() => splash.remove(), 550);
     }
-    if(_authUser) showAppRoot(); else showLoginScreen();
-  }
-  setTimeout(() => { minElapsed = true; maybeFinishSplash(); }, MIN_DISPLAY_MS);
-  window._maybeFinishSplash = maybeFinishSplash;
+    if(hadSessionBefore()){
+      _authUser = auth.currentUser || {offline:true};
+      showAppRoot();
+    } else {
+      showLoginScreen();
+    }
+  }, MIN_DISPLAY_MS);
 })();
 auth.onAuthStateChanged(user => {
-  _authUser = user; _authKnown = true;
-  if(!_splashDone){ window._maybeFinishSplash(); return; }
-  if(user) showAppRoot(); else showLoginScreen();
+  _authUser = user;
+  if(user) markSessionSeen();
+  if(!_splashDone) return; // la decisione iniziale la prende già il timer dell'animazione qui sopra
+  const appVisible = !document.getElementById('appRoot').classList.contains('hidden');
+  if(user && !appVisible) showAppRoot();
+  else if(!user && appVisible) showLoginScreen();
 });
 </script>
 </body>
