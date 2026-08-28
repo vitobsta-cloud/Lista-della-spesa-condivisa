@@ -1,11 +1,14 @@
-const CACHE_NAME = 'spesa-costi-v13';
+const CACHE_NAME = 'spesa-costi-v14';
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
   './chart.min.js',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js',
+  'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js',
+  'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js'
 ];
 
 self.addEventListener('install', event => {
@@ -15,7 +18,10 @@ self.addEventListener('install', event => {
       // la cache HTTP del browser. Senza questo, il service worker rischiava di
       // "aggiornarsi" installando comunque una copia vecchia di index.html
       // ancora presente nella cache HTTP, restando bloccato sulla versione precedente.
-      return Promise.all(
+      // Promise.allSettled (non Promise.all): se un singolo file fallisce a scaricarsi
+      // (es. connessione instabile su un file esterno) non blocca l'installazione
+      // di tutti gli altri, che restano comunque disponibili offline.
+      return Promise.allSettled(
         ASSETS.map(url => fetch(url, {cache:'reload'}).then(response => cache.put(url, response)))
       );
     })

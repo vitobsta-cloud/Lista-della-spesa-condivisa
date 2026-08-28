@@ -328,6 +328,15 @@ const CHANGELOG = [
 ];
 
 /* ---------- Firebase: stesso progetto del camper, collezione separata ---------- */
+if(typeof firebase === 'undefined'){
+  const splash = document.getElementById('splash');
+  if(splash) splash.remove();
+  document.body.insertAdjacentHTML('afterbegin',
+    '<div style="position:fixed;inset:0;z-index:999;background:#eef1f4;display:flex;align-items:center;justify-content:center;padding:28px;text-align:center;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;color:#1c1c1e;font-size:15px;line-height:1.5;">'
+    + '📡 La prima volta serve una connessione a internet per caricare l\'app.<br><br>Connettiti e riprova.'
+    + '</div>');
+  throw new Error('Firebase SDK non disponibile (probabilmente offline al primo avvio, non ancora in cache).');
+}
 const firebaseConfig = {
   apiKey: "AIzaSyCOYBM320R9EwwMkBWpLTHlEiBZA8gg02Q",
   authDomain: "camper-app-ccb86.firebaseapp.com",
