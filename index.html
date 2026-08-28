@@ -190,6 +190,15 @@
   .login-card .sub{color:var(--muted); font-size:13.5px; margin:0 0 20px;}
   .login-error{color:var(--danger); font-size:13px; margin-bottom:10px; display:none; background:#fdeaea; padding:8px 10px; border-radius:8px;}
 
+  .activity-toast{
+    position:fixed; top:16px; left:16px; right:16px; max-width:600px; margin:0 auto;
+    background:var(--card); border-left:4px solid var(--accent); border-radius:14px;
+    padding:14px 16px; box-shadow:0 10px 30px rgba(0,0,0,0.18); z-index:250;
+    font-size:13.5px; font-weight:600; color:var(--text); white-space:pre-wrap; line-height:1.5;
+    animation:toastIn 260ms ease-out; cursor:pointer;
+  }
+  @keyframes toastIn{ from{opacity:0; transform:translateY(-14px);} to{opacity:1; transform:translateY(0);} }
+
   .modal-overlay{position:fixed; inset:0; background:rgba(20,20,25,0.5); display:flex; align-items:center; justify-content:center; padding:20px; z-index:200;}
   .modal-overlay.hidden{display:none;}
   .modal-box{background:var(--card); border-radius:18px; padding:22px 20px; max-width:340px; width:100%; box-shadow:0 12px 40px rgba(0,0,0,0.3); max-height:80vh; overflow-y:auto;}
@@ -293,12 +302,17 @@
   </div>
 </div>
 
+<div id="activityToast" class="activity-toast hidden">
+  <div id="activityToastText"></div>
+</div>
+
 <script>
 /* =========================================================
    Spesa & Costi — app locale, offline-first (localStorage)
    ========================================================= */
-const APP_VERSION = 'v3.0';
+const APP_VERSION = 'v3.1';
 const CHANGELOG = [
+  {v:'v3.1', note:'Aggiunta la conferma prima di eliminare un articolo dalla lista della spesa (capitava di cancellarlo per sbaglio col cestino). Aggiunto anche un avviso "chi ha aggiunto cosa": la prima volta l\'app chiede il tuo nome, e da quel momento vedrai un avviso in alto quando l\'altra persona aggiunge qualcosa alla lista.'},
   {v:'v3.0', note:'L\'app ora richiede il login ed è condivisa: i dati non sono più solo sul telefono, ma sincronizzati in tempo reale con chiunque acceda con lo stesso account. Funziona comunque offline: le modifiche fatte senza connessione si sincronizzano da sole appena torna il segnale.'},
   {v:'v2.0', note:'Aggiunta un\'animazione di avvio: il logo si "assembla" pezzo per pezzo quando apri l\'app.'},
   {v:'v1.9', note:'Il tasto "📜 Storico spese" è ora accessibile anche dalla schermata Costi mensili, oltre che dalla Lista della spesa.'},
@@ -326,7 +340,7 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 const COLLECTION = 'listaSpesaApp';
-const DATA_KEYS = ['ss_lista_items','ss_lista_categorie','ss_lista_storico','ss_costi_mensili','ss_costi_categorie','ss_costi_pagamenti','ss_catalogo_articoli','ss_supermercati'];
+const DATA_KEYS = ['ss_lista_items','ss_lista_categorie','ss_lista_storico','ss_costi_mensili','ss_costi_categorie','ss_costi_pagamenti','ss_catalogo_articoli','ss_supermercati','activity_log'];
 
 db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
 
@@ -387,6 +401,7 @@ function watchAllKeys(){
         _cache[key] = data && data.value !== undefined ? data.value : _cache[key];
       }
       if(isTypingInForm()) return;
+      if(key === 'activity_log') checkNewActivity();
       render();
     }, err => console.error('listener error', key, err));
   });
@@ -433,6 +448,66 @@ async function initApp(){
   ensureDefaultCostiCategorie();
   render();
   watchAllKeys();
+  ensureDeviceName().then(checkNewActivity);
+}
+
+/* ---------- Identità del dispositivo (locale, NON condivisa) e avviso "chi ha aggiunto cosa" ---------- */
+function getDeviceName(){
+  try{ return localStorage.getItem('ss_device_name') || ''; }catch(e){ return ''; }
+}
+function setDeviceName(name){
+  try{ localStorage.setItem('ss_device_name', name); }catch(e){}
+}
+async function ensureDeviceName(){
+  if(getDeviceName()) return;
+  const nome = await promptModal({title:'Come ti chiami?', hint:'Serve solo per sapere chi ha aggiunto cosa. Resta salvato solo su questo telefono.', placeholder:'Es. Marco', okText:'Fatto'});
+  if(nome && nome.trim()) setDeviceName(nome.trim());
+}
+function getLastSeenActivity(){
+  try{ return parseInt(localStorage.getItem('ss_last_seen_activity') || '0', 10); }catch(e){ return 0; }
+}
+function setLastSeenActivity(ts){
+  try{ localStorage.setItem('ss_last_seen_activity', String(ts)); }catch(e){}
+}
+async function logActivity(testo){
+  const user = getDeviceName();
+  if(!user) return;
+  try{
+    const log = lsGet('activity_log', []);
+    log.push({id:uid(), user, testo, ts: Date.now()});
+    lsSet('activity_log', log.slice(-150));
+  }catch(e){ console.error('logActivity failed', e); }
+}
+function checkNewActivity(){
+  const myName = getDeviceName();
+  const lastSeen = getLastSeenActivity();
+  const log = lsGet('activity_log', []);
+  if(log.length === 0) return;
+  const nuovi = log.filter(a => a.ts > lastSeen && a.user && a.user !== myName);
+  if(nuovi.length > 0){
+    const perUser = {};
+    nuovi.forEach(a=>{
+      if(!perUser[a.user]) perUser[a.user] = [];
+      perUser[a.user].push(a.testo);
+    });
+    const messaggio = Object.entries(perUser).map(([user, testi])=>{
+      const elenco = testi.slice(0,5).join(', ') + (testi.length>5 ? ` e altre ${testi.length-5}` : '');
+      return `${user} ha aggiunto: ${elenco}`;
+    }).join('\n');
+    showActivityToast(messaggio);
+  }
+  const maxTs = log.reduce((m,a)=>Math.max(m,a.ts), lastSeen);
+  setLastSeenActivity(maxTs);
+}
+function showActivityToast(message){
+  const el = document.getElementById('activityToast');
+  const textEl = document.getElementById('activityToastText');
+  if(!el || !textEl) return;
+  textEl.textContent = '🔔 ' + message;
+  el.classList.remove('hidden');
+  clearTimeout(showActivityToast._t);
+  showActivityToast._t = setTimeout(()=> el.classList.add('hidden'), 7000);
+  el.onclick = () => el.classList.add('hidden');
 }
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
 function todayStr(){ const d=new Date(); return d.toISOString().slice(0,10); }
@@ -878,6 +953,7 @@ function addListaSpesa(){
   const items = lsGet('ss_lista_items', []);
   items.push({id:uid(), text, category:cat, done:false});
   lsSet('ss_lista_items', items);
+  logActivity(text);
   render();
 }
 function toggleListaSpesa(id){
@@ -887,7 +963,8 @@ function toggleListaSpesa(id){
   lsSet('ss_lista_items', items);
   render();
 }
-function delListaSpesa(id){
+async function delListaSpesa(id){
+  if(!(await customConfirm('Eliminare questo articolo dalla lista?'))) return;
   let items = lsGet('ss_lista_items', []);
   items = items.filter(i=>i.id!==id);
   lsSet('ss_lista_items', items);
@@ -1080,6 +1157,7 @@ function toggleCatalogoArticolo(catalogoId){
     items = items.filter(i=>i.id!==existing.id);
   } else {
     items.push({id:uid(), text:art.nome, category:art.categoria, done:false});
+    logActivity(art.nome);
   }
   lsSet('ss_lista_items', items);
   render();
