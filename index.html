@@ -14,6 +14,7 @@
     --border:#e6e8eb; --accent:#e8834a; --ok:#34a366; --danger:#e5484d;
     --shadow: 0 1px 2px rgba(20,20,30,0.06), 0 1px 1px rgba(20,20,30,0.04);
     --catalogo-font: 14px;
+    --catalogo-weight: 400;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   body{
@@ -140,7 +141,8 @@
   #catalogoList{margin-top:4px;}
   .catalogo-row{
     display:flex; align-items:center; justify-content:space-between; gap:8px;
-    padding:11px 6px; border-bottom:1px solid var(--border); cursor:pointer; font-size:var(--catalogo-font);
+    padding:11px 6px; border-bottom:1px solid var(--border); cursor:pointer;
+    font-size:var(--catalogo-font); font-weight:var(--catalogo-weight);
   }
   .catalogo-row:active{background:#f6f7f8;}
   .catalogo-row.selected{background:#eaf7ee;}
@@ -313,8 +315,9 @@
 /* =========================================================
    Spesa & Costi — app locale, offline-first (localStorage)
    ========================================================= */
-const APP_VERSION = 'v3.4';
+const APP_VERSION = 'v3.5';
 const CHANGELOG = [
+  {v:'v3.5', note:'La dimensione del testo nel catalogo articoli ora si imposta con un numero preciso in px (da 10 a 32), invece di tre taglie fisse. Aggiunta anche la possibilità di scegliere lo spessore del carattere (da Normale a Molto grassetto).'},
   {v:'v3.4', note:'Il pulsante "Aggiungi dal catalogo articoli" ora è più evidente. Aggiunta in Impostazioni la possibilità di scegliere la dimensione del testo dentro il catalogo articoli (Normale/Grande/Molto grande) — è una preferenza personale, resta solo sul tuo telefono.'},
   {v:'v3.3', note:'Corretto un altro caso in cui l\'app restava con lo schermo vuoto per un paio di secondi all\'avvio offline: ora la schermata Home compare subito, e i dati arrivano subito dopo senza bloccare nulla.'},
   {v:'v3.2', note:'L\'app ora si apre sempre subito, senza aspettare la conferma della rete: se hai già fatto accesso in passato su questo telefono, entra direttamente coi dati salvati e controlla la connessione dopo, in background. Utile quando sei senza campo, es. dentro un supermercato.'},
@@ -913,19 +916,30 @@ function getListaGroupCat(){ try{ return localStorage.getItem('ss_ls_groupcat') 
 function setListaGroupCat(v){ try{ localStorage.setItem('ss_ls_groupcat', v?'1':'0'); }catch(e){} render(); }
 function getListaOrder(){ try{ return localStorage.getItem('ss_ls_order') || 'stato'; }catch(e){ return 'stato'; } }
 
-/* ---------- Dimensione testo catalogo articoli (preferenza personale, solo su questo telefono) ---------- */
-const CATALOGO_FONT_SIZES = {normale:'14px', grande:'17px', 'molto-grande':'20px'};
-function getCatalogoFontSize(){
-  try{ return localStorage.getItem('ss_catalogo_font') || 'normale'; }catch(e){ return 'normale'; }
+/* ---------- Testo del catalogo articoli (preferenza personale, solo su questo telefono) ---------- */
+function getCatalogoFontSizePx(){
+  try{
+    const v = parseInt(localStorage.getItem('ss_catalogo_font_px'), 10);
+    return (v && v>=10 && v<=32) ? v : 14;
+  }catch(e){ return 14; }
 }
-function setCatalogoFontSize(v){
-  try{ localStorage.setItem('ss_catalogo_font', v); }catch(e){}
+function setCatalogoFontSizePx(v){
+  let n = parseInt(v, 10);
+  if(isNaN(n)) return;
+  n = Math.max(10, Math.min(32, n));
+  try{ localStorage.setItem('ss_catalogo_font_px', String(n)); }catch(e){}
   applyCatalogoFontSize();
-  render();
+}
+function getCatalogoFontWeight(){
+  try{ return localStorage.getItem('ss_catalogo_font_weight') || '400'; }catch(e){ return '400'; }
+}
+function setCatalogoFontWeight(v){
+  try{ localStorage.setItem('ss_catalogo_font_weight', v); }catch(e){}
+  applyCatalogoFontSize();
 }
 function applyCatalogoFontSize(){
-  const px = CATALOGO_FONT_SIZES[getCatalogoFontSize()] || CATALOGO_FONT_SIZES.normale;
-  document.documentElement.style.setProperty('--catalogo-font', px);
+  document.documentElement.style.setProperty('--catalogo-font', getCatalogoFontSizePx() + 'px');
+  document.documentElement.style.setProperty('--catalogo-weight', getCatalogoFontWeight());
 }
 function setListaOrder(v){ try{ localStorage.setItem('ss_ls_order', v); }catch(e){} render(); }
 
@@ -1728,13 +1742,18 @@ function renderImpostazioni(){
       <div class="body">Aggiungi, rinomina o elimina i prodotti disponibili per l'aggiunta rapida alla lista</div>
     </div>
     <div class="card">
-      <div class="title" style="margin-top:0;">🔤 Dimensione testo nel catalogo</div>
+      <div class="title" style="margin-top:0;">🔤 Testo nel catalogo</div>
       <div class="body">Solo su questo telefono, non condivisa con l'altra persona.</div>
-      <div class="sort-toggle">
-        <button class="sort-btn ${getCatalogoFontSize()==='normale'?'active':''}" onclick="setCatalogoFontSize('normale')">Normale</button>
-        <button class="sort-btn ${getCatalogoFontSize()==='grande'?'active':''}" onclick="setCatalogoFontSize('grande')">Grande</button>
-        <button class="sort-btn ${getCatalogoFontSize()==='molto-grande'?'active':''}" onclick="setCatalogoFontSize('molto-grande')">Molto grande</button>
-      </div>
+      <label>Dimensione (in px, da 10 a 32)</label>
+      <input type="number" min="10" max="32" step="1" value="${getCatalogoFontSizePx()}" oninput="setCatalogoFontSizePx(this.value)">
+      <label>Spessore del carattere</label>
+      <select onchange="setCatalogoFontWeight(this.value)">
+        <option value="400" ${getCatalogoFontWeight()==='400'?'selected':''}>Normale</option>
+        <option value="500" ${getCatalogoFontWeight()==='500'?'selected':''}>Medio</option>
+        <option value="600" ${getCatalogoFontWeight()==='600'?'selected':''}>Semi-grassetto</option>
+        <option value="700" ${getCatalogoFontWeight()==='700'?'selected':''}>Grassetto</option>
+        <option value="800" ${getCatalogoFontWeight()==='800'?'selected':''}>Molto grassetto</option>
+      </select>
     </div>
     <div class="card" style="cursor:pointer;" onclick="navigate('supermercati_editor')">
       <div class="row" style="justify-content:space-between; align-items:center; margin-top:0;">
