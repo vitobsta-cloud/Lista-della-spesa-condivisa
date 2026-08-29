@@ -315,8 +315,9 @@
 /* =========================================================
    Spesa & Costi — app locale, offline-first (localStorage)
    ========================================================= */
-const APP_VERSION = 'v4.2';
+const APP_VERSION = 'v4.3';
 const CHANGELOG = [
+  {v:'v4.3', note:'Corretto un bug (introdotto con "Rimetti in lista" della v4.1) che poteva far comparire un codice a caso al posto del nome della categoria; i dati già rotti vengono sistemati da soli al prossimo avvio. Aggiunta anche la conferma prima di "Chiudi spesa" veloce, per evitare chiusure accidentali con un tap sbagliato.'},
   {v:'v4.2', note:'Aggiunti due grafici nuovi: "Prodotti acquistati per categoria" (quanti articoli comprati per ogni categoria) e "Prodotti più acquistati" (i 10 articoli che tornano più spesso in lista), entrambi calcolati sul periodo selezionato. Funzionano usando l\'elenco articoli delle spese chiuse dalla v4.1 in poi.'},
   {v:'v4.1', note:'Aggiunto "📋 Vedi articoli acquistati" dentro ogni spesa dello storico: apre una schermata con l\'elenco degli articoli comprati in quella spesa, con la possibilità di rimetterli nella lista della spesa o aggiungerli al catalogo per la prossima volta (uno per uno, o tutti insieme). Funziona per le spese chiuse da questa versione in poi; quelle già chiuse prima non hanno il dettaglio articoli salvato.'},
   {v:'v4.0', note:'Quando modifichi una spesa nello storico, ora vedi solo quella (le altre restano nascoste finché non chiudi). Aggiunto anche "📷 Scansiona scontrino": scatta o carica una foto dello scontrino e l\'app prova a leggere da sola l\'importo (e la data) e li inserisce nel modulo — controlla sempre che siano corretti prima di salvare. Richiede una connessione internet la prima volta.'},
@@ -504,6 +505,16 @@ function showLoginScreen(){
   document.getElementById('appRoot').classList.add('hidden');
   document.getElementById('loginScreen').classList.remove('hidden');
 }
+function repairOrphanCategories(){
+  const categorie = ensureDefaultListaCategorie();
+  const nomiValidi = new Set(categorie.map(c=>c.name));
+  const items = lsGet('ss_lista_items', []);
+  let toccato = false;
+  items.forEach(i=>{
+    if(!nomiValidi.has(i.category)){ i.category = 'Altro'; toccato = true; }
+  });
+  if(toccato) lsSet('ss_lista_items', items);
+}
 async function initApp(){
   updateNetBadge();
   render(); // mostra subito la schermata Home, senza aspettare il caricamento dei dati
@@ -511,6 +522,7 @@ async function initApp(){
   await prefetchCache();
   ensureDefaultListaCategorie();
   ensureDefaultCostiCategorie();
+  repairOrphanCategories();
   render(); // ridisegna con i dati reali (locali o dal server) appena pronti
   watchAllKeys();
 }
@@ -1079,21 +1091,13 @@ async function clearListaSpesaFatti(){
   lsSet('ss_lista_items', items);
   render();
 }
-function categoryNameById(id){
-  const cat = ensureDefaultListaCategorie().find(c=>c.id===id);
-  return cat ? cat.name : 'Altro';
-}
-function categoryIdByName(name){
-  const cats = ensureDefaultListaCategorie();
-  const found = cats.find(c=>c.name===name);
-  return found ? found.id : (cats[0] ? cats[0].id : null);
-}
 async function chiudiSpesaVeloce(){
   const items = lsGet('ss_lista_items', []);
   const acquistati = items.filter(i=>i.done);
   if(acquistati.length===0){ await customAlert('Non ci sono ancora articoli spuntati come acquistati.'); return; }
+  if(!(await customConfirm(`Chiudere la spesa con questi ${acquistati.length} articoli? Non registri importo, pagamento o supermercato (puoi aggiungerli dopo dallo storico).`))) return;
   const storico = lsGet('ss_lista_storico', []);
-  const articoliLista = acquistati.map(i => ({text:i.text, categoryName: categoryNameById(i.category)}));
+  const articoliLista = acquistati.map(i => ({text:i.text, categoryName: i.category||'Altro'}));
   storico.push({id:uid(), data:todayStr(), articoli:acquistati.length, articoliLista, importo:null, pagamento:null, supermercato:null, autore:getDeviceName()||null});
   lsSet('ss_lista_storico', storico.slice(-500));
   const restanti = items.filter(i=>!i.done);
@@ -1134,7 +1138,7 @@ async function chiudiSpesa(){
   });
   const supermercato = sceltaSuper || null;
   const storico = lsGet('ss_lista_storico', []);
-  storico.push({id:uid(), data:todayStr(), articoli:acquistati.length, articoliLista: acquistati.map(i => ({text:i.text, categoryName: categoryNameById(i.category)})), importo, pagamento, supermercato, autore:getDeviceName()||null});
+  storico.push({id:uid(), data:todayStr(), articoli:acquistati.length, articoliLista: acquistati.map(i => ({text:i.text, categoryName: i.category||'Altro'})), importo, pagamento, supermercato, autore:getDeviceName()||null});
   lsSet('ss_lista_storico', storico.slice(-500));
   const restanti = items.filter(i=>!i.done);
   lsSet('ss_lista_items', restanti);
@@ -1313,8 +1317,7 @@ function aggiungiArticoloA(dove, articolo){
     const items = lsGet('ss_lista_items', []);
     const giaPresente = items.some(i => i.text.toLowerCase()===testo.toLowerCase() && !i.done);
     if(giaPresente) return false;
-    const categoryId = categoryIdByName(articolo.categoryName);
-    items.push({id:uid(), text:testo, category:categoryId, done:false});
+    items.push({id:uid(), text:testo, category: articolo.categoryName || 'Altro', done:false});
     lsSet('ss_lista_items', items);
     return true;
   } else {
