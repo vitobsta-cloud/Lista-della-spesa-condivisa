@@ -315,8 +315,9 @@
 /* =========================================================
    Spesa & Costi — app locale, offline-first (localStorage)
    ========================================================= */
-const APP_VERSION = 'v4.3';
+const APP_VERSION = 'v4.4';
 const CHANGELOG = [
+  {v:'v4.4', note:'La scansione scontrino ora mostra sempre la foto scattata (per poterla rivedere se la lettura sbaglia) e un pulsante "🔍 Vedi testo letto" con il testo grezzo riconosciuto, utile per capire cosa ha letto l\'app quando l\'importo non è giusto. Migliorata anche un po\' la lettura stessa (immagine ingrandita e contrastata prima di leggerla, parole chiave riconosciute con più precisione).'},
   {v:'v4.3', note:'Corretto un bug (introdotto con "Rimetti in lista" della v4.1) che poteva far comparire un codice a caso al posto del nome della categoria; i dati già rotti vengono sistemati da soli al prossimo avvio. Aggiunta anche la conferma prima di "Chiudi spesa" veloce, per evitare chiusure accidentali con un tap sbagliato.'},
   {v:'v4.2', note:'Aggiunti due grafici nuovi: "Prodotti acquistati per categoria" (quanti articoli comprati per ogni categoria) e "Prodotti più acquistati" (i 10 articoli che tornano più spesso in lista), entrambi calcolati sul periodo selezionato. Funzionano usando l\'elenco articoli delle spese chiuse dalla v4.1 in poi.'},
   {v:'v4.1', note:'Aggiunto "📋 Vedi articoli acquistati" dentro ogni spesa dello storico: apre una schermata con l\'elenco degli articoli comprati in quella spesa, con la possibilità di rimetterli nella lista della spesa o aggiungerli al catalogo per la prossima volta (uno per uno, o tutti insieme). Funziona per le spese chiuse da questa versione in poi; quelle già chiuse prima non hanno il dettaglio articoli salvato.'},
@@ -1212,7 +1213,7 @@ function loadTesseract(){
 }
 function estraiImportoDaTesto(testo){
   const righe = testo.split('\n').map(r=>r.trim()).filter(Boolean);
-  const parolaChiave = /(totale|tot\.?|importo|da pagare)/i;
+  const parolaChiave = /\btotale\b|\btot\.?\b|\bimporto\b|da pagare/i;
   const candidati = [];
   righe.forEach(riga=>{
     const numeri = riga.match(/\d{1,4}[.,]\d{2}/g);
@@ -1234,14 +1235,50 @@ function estraiDataDaTesto(testo){
   const [, gg, mm, aaaa] = m;
   return `${aaaa}-${mm}-${gg}`;
 }
+function preprocessaImmagine(file){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    img.onload = () => {
+      const maxDim = Math.max(img.width, img.height);
+      const scale = maxDim < 1400 ? 2 : 1;
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      try{
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const d = imgData.data;
+        for(let i=0; i<d.length; i+=4){
+          const gray = 0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2];
+          const v = gray > 150 ? 255 : (gray < 90 ? 0 : gray); // più leggibile su foto sfocate/in ombra
+          d[i]=d[i+1]=d[i+2]=v;
+        }
+        ctx.putImageData(imgData, 0, 0);
+      }catch(e){ /* se il canvas non è leggibile, va bene comunque l'immagine originale ridimensionata */ }
+      resolve(canvas);
+    };
+    img.onerror = () => reject(new Error('immagine non valida'));
+    img.src = URL.createObjectURL(file);
+  });
+}
 async function scansionaScontrino(id, inputEl){
   const file = inputEl.files && inputEl.files[0];
   if(!file) return;
   const statusEl = document.getElementById('st_ocr_status_'+id);
+  const previewEl = document.getElementById('st_foto_preview_'+id);
+  const testoEl = document.getElementById('st_ocr_testo_'+id);
+  if(testoEl) testoEl.innerHTML = '';
+  // Mostra subito la foto scattata/scelta, così è sempre rivedibile a prescindere dalla lettura automatica
+  if(previewEl){
+    const url = URL.createObjectURL(file);
+    previewEl.innerHTML = `<img src="${url}" style="width:100%; border-radius:12px; margin:10px 0; max-height:260px; object-fit:contain; background:#e6e8eb;" alt="Foto dello scontrino">`;
+  }
   if(statusEl) statusEl.textContent = '⏳ Lettura dello scontrino in corso...';
   try{
     await loadTesseract();
-    const risultato = await Tesseract.recognize(file, 'ita');
+    const canvas = await preprocessaImmagine(file);
+    const risultato = await Tesseract.recognize(canvas, 'ita');
     const testo = (risultato && risultato.data && risultato.data.text) || '';
     const importoTrovato = estraiImportoDaTesto(testo);
     const dataTrovata = estraiDataDaTesto(testo);
@@ -1255,12 +1292,17 @@ async function scansionaScontrino(id, inputEl){
     }
     if(statusEl){
       statusEl.textContent = importoTrovato != null
-        ? `✅ Importo letto dallo scontrino: ${euro(importoTrovato)}. Controlla che sia giusto prima di salvare.`
-        : '⚠️ Non sono riuscito a leggere un importo. Inseriscilo a mano qui sotto.';
+        ? `✅ Importo letto dallo scontrino: ${euro(importoTrovato)}. Controlla che sia giusto — se è sbagliato, guarda la foto e il testo letto qui sotto, oppure correggilo a mano.`
+        : '⚠️ Non sono riuscito a leggere un importo. Guarda la foto qui sopra e inserisci l\'importo a mano.';
+    }
+    if(testoEl && testo.trim()){
+      const testoId = 'ocrtxt_'+id;
+      testoEl.innerHTML = `<button type="button" class="btn secondary small" style="margin-top:4px;" onclick="const el=document.getElementById('${testoId}'); el.style.display = el.style.display==='none' ? 'block' : 'none';">🔍 Vedi testo letto dallo scontrino</button>
+        <pre id="${testoId}" style="display:none; white-space:pre-wrap; font-size:11.5px; background:#f6f7f8; border-radius:10px; padding:10px; margin-top:8px; max-height:220px; overflow-y:auto;">${escapeHtml(testo)}</pre>`;
     }
   }catch(e){
     console.error('Scansione scontrino fallita', e);
-    if(statusEl) statusEl.textContent = '⚠️ Lettura non riuscita (' + (e.message||'errore') + '). Inserisci i dati a mano.';
+    if(statusEl) statusEl.textContent = '⚠️ Lettura non riuscita (' + (e.message||'errore') + '). La foto resta comunque visibile qui sopra: inserisci i dati a mano.';
   }
 }
 async function handleAutoreChange(selectEl){
@@ -1361,7 +1403,9 @@ function renderStoricoEditForm(s){
     <label style="display:none;">Scontrino</label>
     <input type="file" accept="image/*" capture="environment" id="st_foto_${s.id}" style="display:none;" onchange="scansionaScontrino('${s.id}', this)">
     <button class="btn accent-soft block" type="button" onclick="document.getElementById('st_foto_${s.id}').click()">📷 Scansiona scontrino</button>
+    <div id="st_foto_preview_${s.id}"></div>
     <div id="st_ocr_status_${s.id}" style="font-size:12.5px; color:var(--muted); margin:6px 0 14px;"></div>
+    <div id="st_ocr_testo_${s.id}"></div>
     <label>Chi ha fatto la spesa</label>
     <select id="st_autore_${s.id}" data-prev="${escapeHtml(s.autore||'')}" onchange="handleAutoreChange(this)">
       <option value="" ${!s.autore?'selected':''}>Non specificato</option>
