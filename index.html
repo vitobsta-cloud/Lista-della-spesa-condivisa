@@ -17,9 +17,11 @@
     --catalogo-weight: 400;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html{ overscroll-behavior-y: contain; }
   body{
     margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
     background:var(--bg); color:var(--text); min-height:100vh;
+    overscroll-behavior-y: contain;
   }
   header{
     padding:16px; background:var(--bg);
@@ -315,8 +317,11 @@
 /* =========================================================
    Spesa & Costi — app locale, offline-first (localStorage)
    ========================================================= */
-const APP_VERSION = 'v4.6';
+const APP_VERSION = 'v4.9';
 const CHANGELOG = [
+  {v:'v4.9', note:'Aggiunti al catalogo circa 180 articoli dalla lista che mi hai mandato (carne, frutta e verdura, prodotti per l\'igiene personalizzati per Vito e Silvia, pulizia casa, cibo gatti, e altro), evitando i doppioni con quelli già presenti.'},
+  {v:'v4.8', note:'Aggiunta la categoria "🐱 Cibo gatti", con dentro già pronti nel catalogo: cibo secco, cibo umido, snack e lettiera.'},
+  {v:'v4.7', note:'Corretto un fastidio: scorrendo verso il basso quando si era già in cima alla pagina, il browser interpretava il gesto come "trascina per aggiornare" e ricaricava tutta l\'app (perdendo eventuali modifiche in corso, come una scansione scontrino). Ora quel gesto è disattivato dentro l\'app.'},
   {v:'v4.6', note:'La foto dello scontrino ora viene archiviata dentro la spesa (non solo mostrata temporaneamente): la ritrovi ogni volta che riapri quella voce nello storico, anche giorni dopo. Corretto anche il motivo per cui a volte "spariva" subito dopo la lettura: un aggiornamento in tempo reale poteva ridisegnare la schermata proprio a metà scansione.'},
   {v:'v4.5', note:'La foto dello scontrino ora si può ingrandire a schermo intero toccandola. La lettura automatica prova anche a ruotare l\'immagine (0°, 90°, 180°, 270°) quando lo scontrino risulta storto o fotografato di lato, fermandosi appena trova un importo vicino alla parola "totale" — più lenta ma più affidabile su foto non perfettamente dritte.'},
   {v:'v4.4', note:'La scansione scontrino ora mostra sempre la foto scattata (per poterla rivedere se la lettura sbaglia) e un pulsante "🔍 Vedi testo letto" con il testo grezzo riconosciuto, utile per capire cosa ha letto l\'app quando l\'importo non è giusto. Migliorata anche un po\' la lettura stessa (immagine ingrandita e contrastata prima di leggerla, parole chiave riconosciute con più precisione).'},
@@ -518,6 +523,217 @@ function repairOrphanCategories(){
   });
   if(toccato) lsSet('ss_lista_items', items);
 }
+const ARTICOLI_DA_AGGIUNGERE_29AGO = [
+  {n:'Petto di pollo', c:'Alimentari'},
+  {n:'Piastrine zanzare', c:'Casa'},
+  {n:'Mandorle', c:'Alimentari'},
+  {n:'Assorbenti giorno', c:'Igiene'},
+  {n:'Assorbenti notte', c:'Igiene'},
+  {n:'Piselli', c:'Alimentari'},
+  {n:'Porto', c:'Bevande'},
+  {n:'Tagliatelle', c:'Alimentari'},
+  {n:'Aceto bianco', c:'Alimentari'},
+  {n:'Bastoncini findus', c:'Alimentari'},
+  {n:'Birre', c:'Bevande'},
+  {n:'Candeggina', c:'Pulizia'},
+  {n:'Coca cola', c:'Bevande'},
+  {n:'Detersivo lavastoviglie', c:'Pulizia'},
+  {n:'Fazzoletti', c:'Igiene'},
+  {n:'Detersivo piatti', c:'Pulizia'},
+  {n:'Acciughe', c:'Alimentari'},
+  {n:'Ace sgrass. Cucina', c:'Pulizia'},
+  {n:'Aceto balsamico', c:'Alimentari'},
+  {n:'Acetone', c:'Igiene'},
+  {n:'Acqua distillata', c:'Casa'},
+  {n:'Acqua frizzante e naturale', c:'Bevande'},
+  {n:'Aglio', c:'Frutta e verdura'},
+  {n:'Ammorbidente', c:'Pulizia'},
+  {n:'Ananas', c:'Frutta e verdura'},
+  {n:'Arachidi', c:'Alimentari'},
+  {n:'Ariosto x carne', c:'Alimentari'},
+  {n:'Bagnoschiuma Silvia', c:'Igiene'},
+  {n:'Bagnoschiuma Vito', c:'Igiene'},
+  {n:'Basilico', c:'Frutta e verdura'},
+  {n:'Bastoncini gatti', c:'Cibo gatti'},
+  {n:'Bicarbonato', c:'Alimentari'},
+  {n:'Biscotti digestive sondey', c:'Alimentari'},
+  {n:'Biscotti Vito Silvia', c:'Alimentari'},
+  {n:'Bombolette', c:'Casa'},
+  {n:'Brodo', c:'Alimentari'},
+  {n:'Burro senza lattosio', c:'Alimentari'},
+  {n:'Caffè deca', c:'Alimentari'},
+  {n:'Camomilla', c:'Alimentari'},
+  {n:'Caramello', c:'Alimentari'},
+  {n:'Carbone', c:'Casa'},
+  {n:'Carciofini', c:'Alimentari'},
+  {n:'Carne shimmental', c:'Alimentari'},
+  {n:'Cartaigienica', c:'Igiene'},
+  {n:'Cerotti', c:'Farmacia'},
+  {n:'Cetrioli', c:'Frutta e verdura'},
+  {n:'Cetriolini', c:'Alimentari'},
+  {n:'Chicchette gatti', c:'Cibo gatti'},
+  {n:'Cioccolata caffè arabica', c:'Alimentari'},
+  {n:'Cioccolata fondente', c:'Alimentari'},
+  {n:'Cipolline', c:'Frutta e verdura'},
+  {n:'Cipolline coop', c:'Alimentari'},
+  {n:'Citrosodina', c:'Farmacia'},
+  {n:'Clementine', c:'Frutta e verdura'},
+  {n:'Cloro', c:'Pulizia'},
+  {n:'Colluttorio', c:'Igiene'},
+  {n:'Colomba classica', c:'Alimentari'},
+  {n:'Contenitori cuki', c:'Casa'},
+  {n:'Cornetti', c:'Alimentari'},
+  {n:'Cornflakes', c:'Alimentari'},
+  {n:'Crakers silvia', c:'Alimentari'},
+  {n:'Crakers vito', c:'Alimentari'},
+  {n:'Crema capelli', c:'Igiene'},
+  {n:'Crudo 18 mesi Parma', c:'Alimentari'},
+  {n:'Cubetti di pancetta', c:'Alimentari'},
+  {n:'Cuoricini gatti', c:'Cibo gatti'},
+  {n:'Dadi', c:'Alimentari'},
+  {n:'Dado in polvere', c:'Alimentari'},
+  {n:'Dentifricio Silvia', c:'Igiene'},
+  {n:'Dentifricio Vito', c:'Igiene'},
+  {n:'Deodorante bagno', c:'Casa'},
+  {n:'Detersivo lavatrice', c:'Pulizia'},
+  {n:'Detersivo Napisan', c:'Pulizia'},
+  {n:'Ditaloni', c:'Alimentari'},
+  {n:'Farina semola', c:'Alimentari'},
+  {n:'Fave', c:'Alimentari'},
+  {n:'Fazzoletti scatola', c:'Igiene'},
+  {n:'Fette biscottate al malto, ai cereali', c:'Alimentari'},
+  {n:'Finocchi', c:'Frutta e verdura'},
+  {n:'Fissatore per capelli', c:'Igiene'},
+  {n:'Fragole', c:'Frutta e verdura'},
+  {n:'Funghetti', c:'Alimentari'},
+  {n:'Funghi', c:'Frutta e verdura'},
+  {n:'Gel capelli', c:'Igiene'},
+  {n:'Gelati cremini', c:'Alimentari'},
+  {n:'Gnocchi', c:'Alimentari'},
+  {n:'Gocciole', c:'Alimentari'},
+  {n:'Grissini sgranocchi', c:'Alimentari'},
+  {n:'Intimo', c:'Altro'},
+  {n:'Jogurt', c:'Alimentari'},
+  {n:'Lacca', c:'Igiene'},
+  {n:'Lievito per dolci', c:'Alimentari'},
+  {n:'Liqurizie', c:'Alimentari'},
+  {n:'Mascarpone 750g', c:'Alimentari'},
+  {n:'Melanzane', c:'Frutta e verdura'},
+  {n:'Merluzzo o nasello 210 gr.', c:'Alimentari'},
+  {n:'Mozzarelle', c:'Alimentari'},
+  {n:'Noci, noci brasiliane, mandorle', c:'Alimentari'},
+  {n:'Olio di girasole sagra', c:'Alimentari'},
+  {n:'Olive piccanti', c:'Alimentari'},
+  {n:'Orata 190gr.', c:'Alimentari'},
+  {n:'Orecchiette', c:'Alimentari'},
+  {n:'Orecchiette cime di rapa', c:'Alimentari'},
+  {n:'Oro saiwa', c:'Alimentari'},
+  {n:'Ortolina', c:'Alimentari'},
+  {n:'Orzo', c:'Alimentari'},
+  {n:'Pagliette saponate', c:'Pulizia'},
+  {n:'Pan bauletto cereali', c:'Alimentari'},
+  {n:'Pane pugliese', c:'Alimentari'},
+  {n:'Pane x toast', c:'Alimentari'},
+  {n:'Pangrattato', c:'Alimentari'},
+  {n:'Parmigiano reggiano', c:'Alimentari'},
+  {n:'Pasta fusilli penne', c:'Alimentari'},
+  {n:'Patatine fritte', c:'Alimentari'},
+  {n:'Pellicola aluminio', c:'Casa'},
+  {n:'Peperoncino', c:'Alimentari'},
+  {n:'Peperoni', c:'Frutta e verdura'},
+  {n:'Percoche', c:'Frutta e verdura'},
+  {n:'Pere', c:'Frutta e verdura'},
+  {n:'Pesce', c:'Alimentari'},
+  {n:'Petto di tacchino', c:'Alimentari'},
+  {n:'Pinoli', c:'Alimentari'},
+  {n:'Pizza ristorante', c:'Alimentari'},
+  {n:'Pizze', c:'Alimentari'},
+  {n:'Pollo arrosto', c:'Alimentari'},
+  {n:'Polpa pronta mutti', c:'Alimentari'},
+  {n:'Popcorn', c:'Alimentari'},
+  {n:'Porro', c:'Frutta e verdura'},
+  {n:'Pronto legno', c:'Pulizia'},
+  {n:'Pulisci forno', c:'Pulizia'},
+  {n:'Rapanelli', c:'Frutta e verdura'},
+  {n:'Roastbeef', c:'Alimentari'},
+  {n:'Roll ascelle', c:'Igiene'},
+  {n:'Rotoli carta cucina', c:'Casa'},
+  {n:'Rotoloni carta', c:'Casa'},
+  {n:'Sacchetti ghiaccio', c:'Casa'},
+  {n:'Sacchetti verdi verdura', c:'Casa'},
+  {n:'Sacco sale grosso', c:'Alimentari'},
+  {n:'Salamino piccante', c:'Alimentari'},
+  {n:'Sale grosso', c:'Alimentari'},
+  {n:'Salviette umide', c:'Igiene'},
+  {n:'Savoiardi 250g', c:'Alimentari'},
+  {n:'Scalogno cipolle', c:'Frutta e verdura'},
+  {n:'Schiuma da barba', c:'Igiene'},
+  {n:'Sedano', c:'Frutta e verdura'},
+  {n:'Sgrassatore', c:'Pulizia'},
+  {n:'Sgrassatore smac', c:'Pulizia'},
+  {n:'Sogliola 250 gr.', c:'Alimentari'},
+  {n:'Sottilette', c:'Alimentari'},
+  {n:'Spazzolino denti', c:'Igiene'},
+  {n:'Spinaci', c:'Frutta e verdura'},
+  {n:'Spugne x piatti', c:'Pulizia'},
+  {n:'Straccetti di pollo', c:'Alimentari'},
+  {n:'Stuzzicadenti', c:'Casa'},
+  {n:'Sughi italiamo', c:'Alimentari'},
+  {n:'Sughi star', c:'Alimentari'},
+  {n:'Sugo di carne', c:'Alimentari'},
+  {n:'Tampax', c:'Igiene'},
+  {n:'Te verde', c:'Alimentari'},
+  {n:'Terra', c:'Casa'},
+  {n:'Tonno all\'olio', c:'Alimentari'},
+  {n:'Tonno naturale', c:'Alimentari'},
+  {n:'Tortellini', c:'Alimentari'},
+  {n:'Tovaglioli', c:'Casa'},
+  {n:'Trota 240 gr.', c:'Alimentari'},
+  {n:'Tuc con. Verde', c:'Alimentari'},
+  {n:'Vetril', c:'Pulizia'},
+  {n:'Viakal wc', c:'Pulizia'},
+  {n:'Vino', c:'Bevande'},
+  {n:'Vitello magro, petto di pollo, lonza di maiale', c:'Alimentari'},
+  {n:'Vitellone muscolo', c:'Alimentari'},
+  {n:'Vongole vasetto', c:'Alimentari'},
+  {n:'Wafer', c:'Alimentari'},
+  {n:'Wcnet', c:'Pulizia'},
+  {n:'Wustel', c:'Alimentari'},
+  {n:'Zafferano', c:'Alimentari'},
+  {n:'Zucchero bianco', c:'Alimentari'},
+  {n:'Zucchine', c:'Frutta e verdura'},
+  {n:'Zuppa toscana', c:'Alimentari'}
+];
+function ensureArticoliMancanti(){
+  const catalogo = ensureCatalogoArticoli();
+  const nomiEsistenti = new Set(catalogo.map(a=>a.nome.trim().toLowerCase()));
+  let aggiornato = false;
+  ARTICOLI_DA_AGGIUNGERE_29AGO.forEach(item=>{
+    if(!nomiEsistenti.has(item.n.trim().toLowerCase())){
+      catalogo.push({id:uid(), nome:item.n, categoria:item.c});
+      nomiEsistenti.add(item.n.trim().toLowerCase());
+      aggiornato = true;
+    }
+  });
+  if(aggiornato) lsSet('ss_catalogo_articoli', catalogo);
+}
+function ensureCategoriaCiboGatti(){
+  const cats = lsGet('ss_lista_categorie', []);
+  if(!cats.some(c=>c.name==='Cibo gatti')){
+    cats.push({id:uid(), name:'Cibo gatti', icon:'🐱'});
+    lsSet('ss_lista_categorie', cats);
+  }
+  const catalogo = ensureCatalogoArticoli();
+  const nuoviArticoli = ['Cibo secco gatto', 'Cibo umido gatto', 'Snack gatto', 'Lettiera per gatti'];
+  let aggiornato = false;
+  nuoviArticoli.forEach(nome=>{
+    if(!catalogo.some(a=>a.nome.toLowerCase()===nome.toLowerCase())){
+      catalogo.push({id:uid(), nome, categoria:'Cibo gatti'});
+      aggiornato = true;
+    }
+  });
+  if(aggiornato) lsSet('ss_catalogo_articoli', catalogo);
+}
 async function initApp(){
   updateNetBadge();
   render(); // mostra subito la schermata Home, senza aspettare il caricamento dei dati
@@ -526,6 +742,8 @@ async function initApp(){
   ensureDefaultListaCategorie();
   ensureDefaultCostiCategorie();
   repairOrphanCategories();
+  ensureCategoriaCiboGatti();
+  ensureArticoliMancanti();
   render(); // ridisegna con i dati reali (locali o dal server) appena pronti
   watchAllKeys();
 }
