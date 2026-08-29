@@ -315,8 +315,9 @@
 /* =========================================================
    Spesa & Costi — app locale, offline-first (localStorage)
    ========================================================= */
-const APP_VERSION = 'v4.5';
+const APP_VERSION = 'v4.6';
 const CHANGELOG = [
+  {v:'v4.6', note:'La foto dello scontrino ora viene archiviata dentro la spesa (non solo mostrata temporaneamente): la ritrovi ogni volta che riapri quella voce nello storico, anche giorni dopo. Corretto anche il motivo per cui a volte "spariva" subito dopo la lettura: un aggiornamento in tempo reale poteva ridisegnare la schermata proprio a metà scansione.'},
   {v:'v4.5', note:'La foto dello scontrino ora si può ingrandire a schermo intero toccandola. La lettura automatica prova anche a ruotare l\'immagine (0°, 90°, 180°, 270°) quando lo scontrino risulta storto o fotografato di lato, fermandosi appena trova un importo vicino alla parola "totale" — più lenta ma più affidabile su foto non perfettamente dritte.'},
   {v:'v4.4', note:'La scansione scontrino ora mostra sempre la foto scattata (per poterla rivedere se la lettura sbaglia) e un pulsante "🔍 Vedi testo letto" con il testo grezzo riconosciuto, utile per capire cosa ha letto l\'app quando l\'importo non è giusto. Migliorata anche un po\' la lettura stessa (immagine ingrandita e contrastata prima di leggerla, parole chiave riconosciute con più precisione).'},
   {v:'v4.3', note:'Corretto un bug (introdotto con "Rimetti in lista" della v4.1) che poteva far comparire un codice a caso al posto del nome della categoria; i dati già rotti vengono sistemati da soli al prossimo avvio. Aggiunta anche la conferma prima di "Chiudi spesa" veloce, per evitare chiusure accidentali con un tap sbagliato.'},
@@ -466,7 +467,7 @@ function watchAllKeys(){
         _cache[key] = data && data.value !== undefined ? data.value : _cache[key];
         writeLocalBackup(key, _cache[key]);
       }
-      if(isTypingInForm()) return;
+      if(isTypingInForm() || window._scanInCorso) return;
       if(key === 'activity_log') checkNewActivity();
       render();
     }, err => console.error('listener error', key, err));
@@ -1263,6 +1264,52 @@ function preprocessaImmagine(file){
     img.src = URL.createObjectURL(file);
   });
 }
+function comprimiImmagine(file, maxDim, qualita){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    img.onload = () => {
+      let w = img.width, h = img.height;
+      if(Math.max(w,h) > maxDim){
+        const scale = maxDim / Math.max(w,h);
+        w = Math.round(w*scale); h = Math.round(h*scale);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', qualita));
+    };
+    img.onerror = () => reject(new Error('immagine non valida'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+function salvaFotoScontrino(id, dataUrl){
+  const storico = lsGet('ss_lista_storico', []);
+  const s = storico.find(x=>x.id===id);
+  if(!s) return false;
+  const precedente = s.fotoScontrino;
+  s.fotoScontrino = dataUrl;
+  if(JSON.stringify(storico).length > 700000){
+    s.fotoScontrino = precedente;
+    return false;
+  }
+  lsSet('ss_lista_storico', storico);
+  return true;
+}
+async function rimuoviFotoScontrino(id){
+  if(!(await customConfirm('Rimuovere la foto dello scontrino da questa spesa?'))) return;
+  const storico = lsGet('ss_lista_storico', []);
+  const s = storico.find(x=>x.id===id);
+  if(!s) return;
+  delete s.fotoScontrino;
+  lsSet('ss_lista_storico', storico);
+  render();
+}
+function fotoScontrinoHtml(id, dataUrl){
+  return '<div style="position:relative; margin:10px 0;">'
+    + '<img src="' + dataUrl + '" style="width:100%; border-radius:12px; max-height:260px; object-fit:contain; background:#e6e8eb; cursor:pointer;" alt="Foto dello scontrino, tocca per ingrandire" onclick="apriFotoIngrandita(\'' + dataUrl + '\')">'
+    + '<button type="button" class="btn danger" style="position:absolute; top:8px; right:8px; padding:6px 10px; font-size:12px;" onclick="event.stopPropagation(); rimuoviFotoScontrino(\'' + id + '\')">🗑️ Rimuovi</button>'
+    + '</div>';
+}
 function apriFotoIngrandita(url){
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed; inset:0; z-index:999; background:rgba(10,10,12,0.94); display:flex; align-items:center; justify-content:center; padding:20px;';
@@ -1287,24 +1334,29 @@ function ruotaCanvas(sorgente, gradi){
 async function scansionaScontrino(id, inputEl){
   const file = inputEl.files && inputEl.files[0];
   if(!file) return;
-  const statusEl = document.getElementById('st_ocr_status_'+id);
-  const previewEl = document.getElementById('st_foto_preview_'+id);
-  const testoEl = document.getElementById('st_ocr_testo_'+id);
-  if(testoEl) testoEl.innerHTML = '';
-  // Mostra subito la foto scattata/scelta, così è sempre rivedibile a prescindere dalla lettura automatica
-  if(previewEl){
-    const url = URL.createObjectURL(file);
-    previewEl.innerHTML = `<img src="${url}" style="width:100%; border-radius:12px; margin:10px 0; max-height:260px; object-fit:contain; background:#e6e8eb; cursor:pointer;" alt="Foto dello scontrino, tocca per ingrandire" onclick="apriFotoIngrandita('${url}')">`;
-  }
-  if(statusEl) statusEl.textContent = '⏳ Lettura dello scontrino in corso...';
+  window._scanInCorso = true;
+  const testoEl0 = document.getElementById('st_ocr_testo_'+id);
+  if(testoEl0) testoEl0.innerHTML = '';
   try{
+    const fotoCompressa = await comprimiImmagine(file, 900, 0.6);
+    const archiviata = salvaFotoScontrino(id, fotoCompressa);
+    const previewEl = document.getElementById('st_foto_preview_'+id);
+    if(previewEl){
+      previewEl.innerHTML = archiviata
+        ? fotoScontrinoHtml(id, fotoCompressa)
+        : '<div class="empty" style="margin:10px 0;">⚠️ Foto non archiviata (lo storico ha raggiunto la dimensione massima consentita). Puoi comunque provare a leggere l\'importo qui sotto.</div>';
+    }
+    const statusEl0 = document.getElementById('st_ocr_status_'+id);
+    if(statusEl0) statusEl0.textContent = '⏳ Lettura dello scontrino in corso...';
+
     await loadTesseract();
     const baseCanvas = await preprocessaImmagine(file);
     const rotazioni = [0, 90, 270, 180];
     let migliore = null;
     for(let i=0; i<rotazioni.length; i++){
       const gradi = rotazioni[i];
-      if(statusEl) statusEl.textContent = `⏳ Lettura dello scontrino in corso... (tentativo ${i+1} di ${rotazioni.length})`;
+      const statusMid = document.getElementById('st_ocr_status_'+id);
+      if(statusMid) statusMid.textContent = `⏳ Lettura dello scontrino in corso... (tentativo ${i+1} di ${rotazioni.length})`;
       const canvasRuotato = ruotaCanvas(baseCanvas, gradi);
       const risultato = await Tesseract.recognize(canvasRuotato, 'ita');
       const testo = (risultato && risultato.data && risultato.data.text) || '';
@@ -1329,11 +1381,13 @@ async function scansionaScontrino(id, inputEl){
       const dataEl = document.getElementById('st_data_'+id);
       if(dataEl) dataEl.value = dataTrovata;
     }
+    const statusEl = document.getElementById('st_ocr_status_'+id);
     if(statusEl){
       statusEl.textContent = importoTrovato != null
         ? `✅ Importo letto dallo scontrino: ${euro(importoTrovato)}. Controlla che sia giusto — se è sbagliato, guarda la foto e il testo letto qui sotto, oppure correggilo a mano.`
         : '⚠️ Non sono riuscito a leggere un importo. Guarda la foto qui sopra e inserisci l\'importo a mano.';
     }
+    const testoEl = document.getElementById('st_ocr_testo_'+id);
     if(testoEl && testo.trim()){
       const testoId = 'ocrtxt_'+id;
       testoEl.innerHTML = `<button type="button" class="btn secondary small" style="margin-top:4px;" onclick="const el=document.getElementById('${testoId}'); el.style.display = el.style.display==='none' ? 'block' : 'none';">🔍 Vedi testo letto dallo scontrino</button>
@@ -1341,7 +1395,10 @@ async function scansionaScontrino(id, inputEl){
     }
   }catch(e){
     console.error('Scansione scontrino fallita', e);
-    if(statusEl) statusEl.textContent = '⚠️ Lettura non riuscita (' + (e.message||'errore') + '). La foto resta comunque visibile qui sopra: inserisci i dati a mano.';
+    const statusEl = document.getElementById('st_ocr_status_'+id);
+    if(statusEl) statusEl.textContent = '⚠️ Lettura non riuscita (' + (e.message||'errore') + '). La foto resta comunque archiviata (se il salvataggio è riuscito): inserisci i dati a mano.';
+  } finally {
+    window._scanInCorso = false;
   }
 }
 async function handleAutoreChange(selectEl){
@@ -1442,7 +1499,7 @@ function renderStoricoEditForm(s){
     <label style="display:none;">Scontrino</label>
     <input type="file" accept="image/*" capture="environment" id="st_foto_${s.id}" style="display:none;" onchange="scansionaScontrino('${s.id}', this)">
     <button class="btn accent-soft block" type="button" onclick="document.getElementById('st_foto_${s.id}').click()">📷 Scansiona scontrino</button>
-    <div id="st_foto_preview_${s.id}"></div>
+    <div id="st_foto_preview_${s.id}">${s.fotoScontrino ? fotoScontrinoHtml(s.id, s.fotoScontrino) : ''}</div>
     <div id="st_ocr_status_${s.id}" style="font-size:12.5px; color:var(--muted); margin:6px 0 14px;"></div>
     <div id="st_ocr_testo_${s.id}"></div>
     <label>Chi ha fatto la spesa</label>
