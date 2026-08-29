@@ -315,8 +315,9 @@
 /* =========================================================
    Spesa & Costi — app locale, offline-first (localStorage)
    ========================================================= */
-const APP_VERSION = 'v4.4';
+const APP_VERSION = 'v4.5';
 const CHANGELOG = [
+  {v:'v4.5', note:'La foto dello scontrino ora si può ingrandire a schermo intero toccandola. La lettura automatica prova anche a ruotare l\'immagine (0°, 90°, 180°, 270°) quando lo scontrino risulta storto o fotografato di lato, fermandosi appena trova un importo vicino alla parola "totale" — più lenta ma più affidabile su foto non perfettamente dritte.'},
   {v:'v4.4', note:'La scansione scontrino ora mostra sempre la foto scattata (per poterla rivedere se la lettura sbaglia) e un pulsante "🔍 Vedi testo letto" con il testo grezzo riconosciuto, utile per capire cosa ha letto l\'app quando l\'importo non è giusto. Migliorata anche un po\' la lettura stessa (immagine ingrandita e contrastata prima di leggerla, parole chiave riconosciute con più precisione).'},
   {v:'v4.3', note:'Corretto un bug (introdotto con "Rimetti in lista" della v4.1) che poteva far comparire un codice a caso al posto del nome della categoria; i dati già rotti vengono sistemati da soli al prossimo avvio. Aggiunta anche la conferma prima di "Chiudi spesa" veloce, per evitare chiusure accidentali con un tap sbagliato.'},
   {v:'v4.2', note:'Aggiunti due grafici nuovi: "Prodotti acquistati per categoria" (quanti articoli comprati per ogni categoria) e "Prodotti più acquistati" (i 10 articoli che tornano più spesso in lista), entrambi calcolati sul periodo selezionato. Funzionano usando l\'elenco articoli delle spese chiuse dalla v4.1 in poi.'},
@@ -1262,6 +1263,27 @@ function preprocessaImmagine(file){
     img.src = URL.createObjectURL(file);
   });
 }
+function apriFotoIngrandita(url){
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed; inset:0; z-index:999; background:rgba(10,10,12,0.94); display:flex; align-items:center; justify-content:center; padding:20px;';
+  overlay.innerHTML = `<img src="${url}" style="max-width:100%; max-height:100%; object-fit:contain; border-radius:8px;">`;
+  overlay.onclick = () => overlay.remove();
+  document.body.appendChild(overlay);
+}
+function ruotaCanvas(sorgente, gradi){
+  if(gradi === 0) return sorgente;
+  const rad = gradi * Math.PI / 180;
+  const swap = (gradi === 90 || gradi === 270);
+  const w = swap ? sorgente.height : sorgente.width;
+  const h = swap ? sorgente.width : sorgente.height;
+  const out = document.createElement('canvas');
+  out.width = w; out.height = h;
+  const ctx = out.getContext('2d');
+  ctx.translate(w/2, h/2);
+  ctx.rotate(rad);
+  ctx.drawImage(sorgente, -sorgente.width/2, -sorgente.height/2);
+  return out;
+}
 async function scansionaScontrino(id, inputEl){
   const file = inputEl.files && inputEl.files[0];
   if(!file) return;
@@ -1272,16 +1294,33 @@ async function scansionaScontrino(id, inputEl){
   // Mostra subito la foto scattata/scelta, così è sempre rivedibile a prescindere dalla lettura automatica
   if(previewEl){
     const url = URL.createObjectURL(file);
-    previewEl.innerHTML = `<img src="${url}" style="width:100%; border-radius:12px; margin:10px 0; max-height:260px; object-fit:contain; background:#e6e8eb;" alt="Foto dello scontrino">`;
+    previewEl.innerHTML = `<img src="${url}" style="width:100%; border-radius:12px; margin:10px 0; max-height:260px; object-fit:contain; background:#e6e8eb; cursor:pointer;" alt="Foto dello scontrino, tocca per ingrandire" onclick="apriFotoIngrandita('${url}')">`;
   }
   if(statusEl) statusEl.textContent = '⏳ Lettura dello scontrino in corso...';
   try{
     await loadTesseract();
-    const canvas = await preprocessaImmagine(file);
-    const risultato = await Tesseract.recognize(canvas, 'ita');
-    const testo = (risultato && risultato.data && risultato.data.text) || '';
-    const importoTrovato = estraiImportoDaTesto(testo);
-    const dataTrovata = estraiDataDaTesto(testo);
+    const baseCanvas = await preprocessaImmagine(file);
+    const rotazioni = [0, 90, 270, 180];
+    let migliore = null;
+    for(let i=0; i<rotazioni.length; i++){
+      const gradi = rotazioni[i];
+      if(statusEl) statusEl.textContent = `⏳ Lettura dello scontrino in corso... (tentativo ${i+1} di ${rotazioni.length})`;
+      const canvasRuotato = ruotaCanvas(baseCanvas, gradi);
+      const risultato = await Tesseract.recognize(canvasRuotato, 'ita');
+      const testo = (risultato && risultato.data && risultato.data.text) || '';
+      const importo = estraiImportoDaTesto(testo);
+      const conChiave = /\btotale\b/i.test(testo);
+      if(importo != null && conChiave){
+        migliore = {importo, testo, dataTrovata: estraiDataDaTesto(testo)};
+        break; // trovato un importo vicino alla parola "totale": ci fermiamo qui, non serve provare altre rotazioni
+      }
+      if(importo != null && !migliore){
+        migliore = {importo, testo, dataTrovata: estraiDataDaTesto(testo)}; // ripiego, ma continuiamo a cercare qualcosa di più sicuro
+      }
+    }
+    const importoTrovato = migliore ? migliore.importo : null;
+    const dataTrovata = migliore ? migliore.dataTrovata : null;
+    const testo = migliore ? migliore.testo : '';
     if(importoTrovato != null){
       const importoEl = document.getElementById('st_importo_'+id);
       if(importoEl) importoEl.value = importoTrovato;
