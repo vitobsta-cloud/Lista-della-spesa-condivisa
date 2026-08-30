@@ -317,9 +317,10 @@
 /* =========================================================
    Spesa & Costi — app locale, offline-first (localStorage)
    ========================================================= */
-const APP_VERSION = 'v5.2';
+const APP_VERSION = 'v5.3';
 const CHANGELOG = [
-  {v:'v5.2', note:'Nello Storico spese ora puoi filtrare per mese specifico (con frecce Prec/Succ) oltre a vedere tutto. Sistemati i colori sbiaditi del grafico a torta "Prodotti per categoria", ora più vivaci. Aggiunta anche l\'opzione "Un mese" nei Grafici, per vedere un singolo mese invece dei soli intervalli fissi (3/6/12 mesi).'},
+  {v:'v5.3', note:'Tolti i pulsanti "Ultimi 3/6/12 mesi" nei Grafici (creavano confusione insieme al resto): ora c\'è solo un intervallo "Da [mese] a [mese]" con le frecce Prec/Succ, puoi scegliere esattamente il periodo o anche un singolo mese (impostando Da e A uguali).'},
+  {v:'v5.2', note:'Nello Storico spese ora puoi filtrare per mese specifico (con frecce Prec/Succ) oltre a vedere tutto. Sistemati i colori sbiaditi del grafico a torta "Prodotti per categoria", ora più vivaci.'},
   {v:'v5.1', note:'Tolta la sezione "Costi mensili" (bollette): questa app serve solo per la spesa al supermercato. Nei Grafici, al posto dei costi fissi trovi ora un "🏬 Riepilogo per supermercato" con il totale speso in ciascuno, oltre ai grafici sui prodotti già presenti. Aggiunto anche un totale (mese corrente + complessivo) in cima alla Cronologia spese.'},
   {v:'v5.0', note:'La lettura dello scontrino ora è molto più veloce: prima fa un test veloce in miniatura su tutte le rotazioni per capire come è orientato (pochi secondi), poi legge per bene una sola volta, non più fino a 4. Corretto anche il tasto indietro sulla foto ingrandita: prima riportava alla Home, ora chiude solo la foto e resti dove eri.'},
   {v:'v4.9', note:'Aggiunti al catalogo circa 180 articoli dalla lista che mi hai mandato (carne, frutta e verdura, prodotti per l\'igiene personalizzati per Vito e Silvia, pulizia casa, cibo gatti, e altro), evitando i doppioni con quelli già presenti.'},
@@ -2275,26 +2276,30 @@ async function delCosto(id){
 }
 
 /* ---------- GRAFICI ---------- */
-function getGraficiPeriodo(){ try{ return localStorage.getItem('ss_grafici_periodo') || '6m'; }catch(e){ return '6m'; } }
-function setGraficiPeriodo(v){ try{ localStorage.setItem('ss_grafici_periodo', v); }catch(e){} render(); }
-function getGraficiMeseSingolo(){ try{ return localStorage.getItem('ss_grafici_mese_singolo') || monthKey(); }catch(e){ return monthKey(); } }
-function setGraficiMeseSingolo(mk){ try{ localStorage.setItem('ss_grafici_mese_singolo', mk); }catch(e){} render(); }
-function cambiaMeseGraficiSingolo(delta){ setGraficiMeseSingolo(addMonths(getGraficiMeseSingolo(), delta)); }
+function getGraficiDa(){ try{ return localStorage.getItem('ss_grafici_da') || addMonths(monthKey(), -2); }catch(e){ return addMonths(monthKey(), -2); } }
+function getGraficiA(){ try{ return localStorage.getItem('ss_grafici_a') || monthKey(); }catch(e){ return monthKey(); } }
+function setGraficiDa(mk){ try{ localStorage.setItem('ss_grafici_da', mk); }catch(e){} render(); }
+function setGraficiA(mk){ try{ localStorage.setItem('ss_grafici_a', mk); }catch(e){} render(); }
+function cambiaGraficiDa(delta){ setGraficiDa(addMonths(getGraficiDa(), delta)); }
+function cambiaGraficiA(delta){ setGraficiA(addMonths(getGraficiA(), delta)); }
 
 function renderGrafici(){
-  const periodo = getGraficiPeriodo();
+  const da = getGraficiDa(), a = getGraficiA();
   return `
-    <div class="period-toggle">
-      <button class="period-btn ${periodo==='3m'?'active':''}" onclick="setGraficiPeriodo('3m')">Ultimi 3 mesi</button>
-      <button class="period-btn ${periodo==='6m'?'active':''}" onclick="setGraficiPeriodo('6m')">Ultimi 6 mesi</button>
-      <button class="period-btn ${periodo==='12m'?'active':''}" onclick="setGraficiPeriodo('12m')">Ultimo anno</button>
-      <button class="period-btn ${periodo==='singolo'?'active':''}" onclick="setGraficiPeriodo('singolo')">Un mese</button>
+    <div class="card">
+      <div class="s" style="margin:0 0 4px;">Da</div>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+        <button class="btn secondary small" onclick="cambiaGraficiDa(-1)">‹ Prec</button>
+        <div style="font-weight:800; font-size:15.5px;">${escapeHtml(monthLabel(da))}</div>
+        <button class="btn secondary small" onclick="cambiaGraficiDa(1)">Succ ›</button>
+      </div>
+      <div class="s" style="margin:14px 0 4px;">A</div>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+        <button class="btn secondary small" onclick="cambiaGraficiA(-1)">‹ Prec</button>
+        <div style="font-weight:800; font-size:15.5px;">${escapeHtml(monthLabel(a))}</div>
+        <button class="btn secondary small" onclick="cambiaGraficiA(1)">Succ ›</button>
+      </div>
     </div>
-    ${periodo==='singolo' ? `<div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:10px;">
-      <button class="btn secondary small" onclick="cambiaMeseGraficiSingolo(-1)">‹ Prec</button>
-      <div style="font-weight:800; font-size:15.5px;">${escapeHtml(monthLabel(getGraficiMeseSingolo()))}</div>
-      <button class="btn secondary small" onclick="cambiaMeseGraficiSingolo(1)">Succ ›</button>
-    </div>` : ''}
     <div class="chart-title">Andamento mensile: spesa al supermercato</div>
     <div class="card"><div class="chart-wrap"><canvas id="chartAndamento"></canvas></div></div>
     <div class="chart-title">🏬 Riepilogo per supermercato (periodo selezionato)</div>
@@ -2305,21 +2310,20 @@ function renderGrafici(){
     <div class="card"><div class="chart-wrap"><canvas id="chartProdottiTop"></canvas></div></div>
   `;
 }
-function nMonthsFromPeriodo(p){ return p==='3m'?3 : p==='12m'?12 : 6; }
 function drawGrafici(){
   graficiChartInstances.forEach(ch=>{ try{ ch.destroy(); }catch(e){} });
   graficiChartInstances = [];
   if(typeof Chart === 'undefined') return;
 
-  const periodo = getGraficiPeriodo();
-  const nowMk = monthKey();
-  let months;
-  if(periodo === 'singolo'){
-    months = [getGraficiMeseSingolo()];
-  } else {
-    const n = nMonthsFromPeriodo(periodo);
-    months = [];
-    for(let i=n-1;i>=0;i--) months.push(addMonths(nowMk, -i));
+  let da = getGraficiDa(), a = getGraficiA();
+  if(da > a){ const tmp = da; da = a; a = tmp; } // se "Da" è dopo "A", li scambiamo così l'intervallo ha sempre senso
+  const months = [];
+  let cursore = da;
+  let sicurezza = 0;
+  while(cursore <= a && sicurezza < 60){ // limite di sicurezza: max 60 mesi in un colpo solo
+    months.push(cursore);
+    cursore = addMonths(cursore, 1);
+    sicurezza++;
   }
 
   const storico = lsGet('ss_lista_storico', []);
