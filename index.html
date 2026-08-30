@@ -317,8 +317,9 @@
 /* =========================================================
    Spesa & Costi — app locale, offline-first (localStorage)
    ========================================================= */
-const APP_VERSION = 'v5.0';
+const APP_VERSION = 'v5.1';
 const CHANGELOG = [
+  {v:'v5.1', note:'Tolta la sezione "Costi mensili" (bollette): questa app serve solo per la spesa al supermercato. Nei Grafici, al posto dei costi fissi trovi ora un "🏬 Riepilogo per supermercato" con il totale speso in ciascuno, oltre ai grafici sui prodotti già presenti. Aggiunto anche un totale (mese corrente + complessivo) in cima alla Cronologia spese.'},
   {v:'v5.0', note:'La lettura dello scontrino ora è molto più veloce: prima fa un test veloce in miniatura su tutte le rotazioni per capire come è orientato (pochi secondi), poi legge per bene una sola volta, non più fino a 4. Corretto anche il tasto indietro sulla foto ingrandita: prima riportava alla Home, ora chiude solo la foto e resti dove eri.'},
   {v:'v4.9', note:'Aggiunti al catalogo circa 180 articoli dalla lista che mi hai mandato (carne, frutta e verdura, prodotti per l\'igiene personalizzati per Vito e Silvia, pulizia casa, cibo gatti, e altro), evitando i doppioni con quelli già presenti.'},
   {v:'v4.8', note:'Aggiunta la categoria "🐱 Cibo gatti", con dentro già pronti nel catalogo: cibo secco, cibo umido, snack e lettiera.'},
@@ -1072,8 +1073,7 @@ const CATALOGO_SPESA = [
 const BASE_SECTIONS = [
   {id:'lista_spesa', icon:'🛒', color:'#fef3c7', label:'Lista della spesa', sub:'Organizzata per categoria'},
   {id:'storico_spesa', icon:'📜', color:'#f3e8d8', label:'Cronologia spese', sub:'Le spese chiuse, con importi e dettagli'},
-  {id:'costi_mensili', icon:'💶', color:'#dbeafe', label:'Costi mensili', sub:'Bollette, abbonamenti e spese fisse'},
-  {id:'grafici', icon:'📊', color:'#d0f4ea', label:'Grafici', sub:'Spesa e costi nel tempo'},
+  {id:'grafici', icon:'📊', color:'#d0f4ea', label:'Grafici', sub:'Spesa al supermercato nel tempo'},
   {id:'impostazioni', icon:'⚙️', color:'#eceef1', label:'Impostazioni', sub:'Categorie, backup, versione'}
 ];
 
@@ -1407,6 +1407,21 @@ function renderStoricoSpesa(){
     state.editStoricoId = null; // la spesa non esiste più: mostra l'elenco normale sotto
   }
   let html = `<div class="list-spacer"></div>`;
+
+  // Riepilogo: totale del mese corrente e totale complessivo (solo spese con importo registrato)
+  const meseCorrente = monthKey();
+  const conImporto = storico.filter(s=>s.importo!=null);
+  const totMese = storico.filter(s=>(s.data||'').slice(0,7)===meseCorrente && s.importo!=null).reduce((sum,s)=>sum+s.importo, 0);
+  const totComplessivo = conImporto.reduce((sum,s)=>sum+s.importo, 0);
+  const senzaImporto = storico.length - conImporto.length;
+  html += `<div class="card">
+    <div class="row" style="justify-content:space-between; align-items:center; margin-top:0;">
+      <div><div class="s" style="margin:0;">Totale ${escapeHtml(monthLabel(meseCorrente))}</div><div style="font-weight:800; font-size:20px;">${euro(totMese)}</div></div>
+      <div style="text-align:right;"><div class="s" style="margin:0;">Totale complessivo</div><div style="font-weight:800; font-size:20px;">${euro(totComplessivo)}</div></div>
+    </div>
+    ${senzaImporto>0 ? `<div class="body" style="margin-top:10px;">${senzaImporto} spes${senzaImporto===1?'a':'e'} senza importo registrato, non ${senzaImporto===1?'conteggiata':'conteggiate'} qui sopra.</div>` : ''}
+  </div>`;
+
   storico.forEach(s=>{
     const importoTxt = s.importo!=null ? euro(s.importo) : '—';
     const dettPezzi = [];
@@ -2234,18 +2249,14 @@ function renderGrafici(){
       <button class="period-btn ${periodo==='6m'?'active':''}" onclick="setGraficiPeriodo('6m')">Ultimi 6 mesi</button>
       <button class="period-btn ${periodo==='12m'?'active':''}" onclick="setGraficiPeriodo('12m')">Ultimo anno</button>
     </div>
-    <div class="chart-title">Andamento mensile: spesa vs costi fissi</div>
+    <div class="chart-title">Andamento mensile: spesa al supermercato</div>
     <div class="card"><div class="chart-wrap"><canvas id="chartAndamento"></canvas></div></div>
-    <div class="chart-title">Ripartizione per categoria (${monthLabel(monthKey())})</div>
-    <div class="card"><div class="chart-wrap"><canvas id="chartCategorie"></canvas></div></div>
+    <div class="chart-title">🏬 Riepilogo per supermercato (periodo selezionato)</div>
+    <div class="card"><div class="chart-wrap"><canvas id="chartSupermercati"></canvas></div><div id="listaSupermercati"></div></div>
     <div class="chart-title">📦 Prodotti acquistati per categoria (periodo selezionato)</div>
     <div class="card"><div class="chart-wrap"><canvas id="chartProdottiCat"></canvas></div></div>
     <div class="chart-title">🏆 Prodotti più acquistati (periodo selezionato)</div>
     <div class="card"><div class="chart-wrap"><canvas id="chartProdottiTop"></canvas></div></div>
-    <div class="chart-title">Costi fissi per categoria (periodo selezionato)</div>
-    <div class="card"><div class="chart-wrap"><canvas id="chartCostiCat"></canvas></div></div>
-    <div class="chart-title">Dove spendi di più: spesa per supermercato (periodo selezionato)</div>
-    <div class="card"><div class="chart-wrap"><canvas id="chartSupermercati"></canvas></div></div>
   `;
 }
 function nMonthsFromPeriodo(p){ return p==='3m'?3 : p==='12m'?12 : 6; }
@@ -2261,14 +2272,10 @@ function drawGrafici(){
   for(let i=n-1;i>=0;i--) months.push(addMonths(nowMk, -i));
 
   const storico = lsGet('ss_lista_storico', []);
-  const pagamenti = lsGet('ss_costi_pagamenti', []);
 
   const speseArr = months.map(mk => {
     return storico.filter(s => s.data && s.data.slice(0,7)===mk && s.importo!=null)
       .reduce((sum,s)=>sum+(Number(s.importo)||0), 0);
-  });
-  const costiArr = months.map(mk => {
-    return pagamenti.filter(p=>p.mese===mk).reduce((sum,p)=>sum+(Number(p.importo)||0), 0);
   });
 
   const c1 = document.getElementById('chartAndamento');
@@ -2278,8 +2285,7 @@ function drawGrafici(){
       data:{
         labels: months.map(monthLabel),
         datasets:[
-          {label:'Lista della spesa', data:speseArr, backgroundColor:'#e8834a'},
-          {label:'Costi fissi', data:costiArr, backgroundColor:'#5b8def'}
+          {label:'Lista della spesa', data:speseArr, backgroundColor:'#e8834a'}
         ]
       },
       options:{
@@ -2288,37 +2294,6 @@ function drawGrafici(){
         scales:{ y:{ beginAtZero:true, ticks:{ callback:v=>'€'+v } } }
       }
     }));
-  }
-
-  // Ripartizione per categoria (mese corrente): costi per categoria + spesa lista come voce unica
-  const categorieCosti = ensureDefaultCostiCategorie();
-  const costiQuestoMese = pagamenti.filter(p=>p.mese===nowMk);
-  const costiDef = lsGet('ss_costi_mensili', []);
-  const catTotals = {};
-  costiQuestoMese.forEach(p=>{
-    const def = costiDef.find(c=>c.id===p.costoId);
-    const cat = def ? def.categoria : 'Altro';
-    catTotals[cat] = (catTotals[cat]||0) + (Number(p.importo)||0);
-  });
-  const speseQuestoMese = storico.filter(s=>s.data && s.data.slice(0,7)===nowMk && s.importo!=null)
-    .reduce((sum,s)=>sum+(Number(s.importo)||0), 0);
-  if(speseQuestoMese>0) catTotals['Lista della spesa'] = speseQuestoMese;
-
-  const c2 = document.getElementById('chartCategorie');
-  const catLabels = Object.keys(catTotals);
-  if(c2){
-    if(catLabels.length===0){
-      c2.parentElement.innerHTML = '<div class="empty">Ancora nessun dato per questo mese.</div>';
-    } else {
-      graficiChartInstances.push(new Chart(c2, {
-        type:'pie',
-        data:{
-          labels:catLabels,
-          datasets:[{ data:catLabels.map(l=>catTotals[l]), backgroundColor:catLabels.map(l=>colorePerCategoria(l)==='#eceef1'?'#c9ccd1':colorePerCategoria(l).replace('#f','#e')) }]
-        },
-        options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom', labels:{boxWidth:12, font:{size:11}}}} }
-      }));
-    }
   }
 
   // Prodotti acquistati per categoria + prodotti più acquistati, nel periodo selezionato
@@ -2372,28 +2347,6 @@ function drawGrafici(){
     }
   }
 
-  // Costi fissi per categoria nel periodo selezionato
-  const pagPeriodo = pagamenti.filter(p=>months.includes(p.mese));
-  const catPeriodo = {};
-  pagPeriodo.forEach(p=>{
-    const def = costiDef.find(c=>c.id===p.costoId);
-    const cat = def ? def.categoria : 'Altro';
-    catPeriodo[cat] = (catPeriodo[cat]||0) + (Number(p.importo)||0);
-  });
-  const c3 = document.getElementById('chartCostiCat');
-  const catPLabels = Object.keys(catPeriodo);
-  if(c3){
-    if(catPLabels.length===0){
-      c3.parentElement.innerHTML = '<div class="empty">Nessun costo pagato nel periodo selezionato.</div>';
-    } else {
-      graficiChartInstances.push(new Chart(c3, {
-        type:'bar',
-        data:{ labels:catPLabels, datasets:[{ label:'Totale', data:catPLabels.map(l=>catPeriodo[l]), backgroundColor:catPLabels.map(l=>colorePerCategoria(l).replace('#f','#e')) }] },
-        options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{ beginAtZero:true, ticks:{ callback:v=>'€'+v } } } }
-      }));
-    }
-  }
-
   // Spesa per supermercato nel periodo selezionato (solo spese con importo registrato)
   const speseConSuper = storico.filter(s => months.includes((s.data||'').slice(0,7)) && s.importo!=null);
   const superTotals = {};
@@ -2402,6 +2355,7 @@ function drawGrafici(){
     superTotals[nome] = (superTotals[nome]||0) + (Number(s.importo)||0);
   });
   const c4 = document.getElementById('chartSupermercati');
+  const listaEl = document.getElementById('listaSupermercati');
   const superLabels = Object.keys(superTotals).sort((a,b)=>superTotals[b]-superTotals[a]);
   if(c4){
     if(superLabels.length===0){
@@ -2412,6 +2366,13 @@ function drawGrafici(){
         data:{ labels:superLabels, datasets:[{ label:'Totale speso', data:superLabels.map(l=>superTotals[l]), backgroundColor:'#e8834a' }] },
         options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{ beginAtZero:true, ticks:{ callback:v=>'€'+v } } } }
       }));
+      if(listaEl){
+        const totaleComplessivo = superLabels.reduce((sum,l)=>sum+superTotals[l], 0);
+        listaEl.innerHTML = '<div style="margin-top:14px; border-top:1px solid var(--border); padding-top:10px;">'
+          + superLabels.map(l => `<div class="row" style="justify-content:space-between; margin:6px 0;"><span>${escapeHtml(l)}</span><span style="font-weight:700;">${euro(superTotals[l])}</span></div>`).join('')
+          + `<div class="row" style="justify-content:space-between; margin:10px 0 0; padding-top:8px; border-top:1px solid var(--border); font-weight:800;"><span>Totale</span><span>${euro(totaleComplessivo)}</span></div>`
+          + '</div>';
+      }
     }
   }
 }
@@ -2433,13 +2394,6 @@ function renderImpostazioni(){
         <span class="chev">›</span>
       </div>
       <div class="body">Gestisci le categorie della lista della spesa</div>
-    </div>
-    <div class="card" style="cursor:pointer;" onclick="navigate('cat_editor', {editCatKind:'costi'})">
-      <div class="row" style="justify-content:space-between; align-items:center; margin-top:0;">
-        <div class="title" style="margin:0;">💶 Categorie costi mensili</div>
-        <span class="chev">›</span>
-      </div>
-      <div class="body">Gestisci le categorie dei costi mensili</div>
     </div>
     <div class="card" style="cursor:pointer;" onclick="navigate('catalogo_gestione', {editCatId:null, catGestioneSearch:''})">
       <div class="row" style="justify-content:space-between; align-items:center; margin-top:0;">
@@ -2480,7 +2434,7 @@ function renderImpostazioni(){
     </div>
     <div class="card">
       <div class="title" style="margin-top:0;">🗑️ Reset dati</div>
-      <div class="body">Cancella tutti i dati salvati su questo telefono (lista spesa, storico, costi mensili, categorie).</div>
+      <div class="body">Cancella tutti i dati salvati su questo telefono (lista spesa, storico, catalogo, categorie).</div>
       <button class="btn danger block" style="margin-top:12px;" onclick="resetDati()">Cancella tutti i dati</button>
     </div>
   `;
