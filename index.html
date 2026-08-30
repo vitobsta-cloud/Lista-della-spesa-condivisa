@@ -317,8 +317,9 @@
 /* =========================================================
    Spesa & Costi — app locale, offline-first (localStorage)
    ========================================================= */
-const APP_VERSION = 'v5.1';
+const APP_VERSION = 'v5.2';
 const CHANGELOG = [
+  {v:'v5.2', note:'Nello Storico spese ora puoi filtrare per mese specifico (con frecce Prec/Succ) oltre a vedere tutto. Sistemati i colori sbiaditi del grafico a torta "Prodotti per categoria", ora più vivaci. Aggiunta anche l\'opzione "Un mese" nei Grafici, per vedere un singolo mese invece dei soli intervalli fissi (3/6/12 mesi).'},
   {v:'v5.1', note:'Tolta la sezione "Costi mensili" (bollette): questa app serve solo per la spesa al supermercato. Nei Grafici, al posto dei costi fissi trovi ora un "🏬 Riepilogo per supermercato" con il totale speso in ciascuno, oltre ai grafici sui prodotti già presenti. Aggiunto anche un totale (mese corrente + complessivo) in cima alla Cronologia spese.'},
   {v:'v5.0', note:'La lettura dello scontrino ora è molto più veloce: prima fa un test veloce in miniatura su tutte le rotazioni per capire come è orientato (pochi secondi), poi legge per bene una sola volta, non più fino a 4. Corretto anche il tasto indietro sulla foto ingrandita: prima riportava alla Home, ora chiude solo la foto e resti dove eri.'},
   {v:'v4.9', note:'Aggiunti al catalogo circa 180 articoli dalla lista che mi hai mandato (carne, frutta e verdura, prodotti per l\'igiene personalizzati per Vito e Silvia, pulizia casa, cibo gatti, e altro), evitando i doppioni con quelli già presenti.'},
@@ -1025,6 +1026,19 @@ function iconaPerCategoria(cat, listaCategorie){
   const found = (listaCategorie||[]).find(c=>c.name===cat);
   return found ? found.icon : '📦';
 }
+// Tavolozza vivace per i grafici: quella sopra (CAT_COLORS) è pensata per sfondi tenui delle card,
+// qui nei grafici a torta/barre risultava troppo sbiadita.
+const CAT_CHART_COLORS = {
+  'Alimentari':'#e8834a', 'Frutta e verdura':'#34a366', 'Igiene':'#4f8ef7', 'Farmacia':'#e0559c',
+  'Pulizia':'#8b6fe0', 'Bevande':'#e5484d', 'Casa':'#d4a017', 'Cibo gatti':'#20b2ba', 'Altro':'#8a8f98'
+};
+const CUSTOM_CHART_COLORS = ['#e8834a','#34a366','#4f8ef7','#e0559c','#8b6fe0','#e5484d','#d4a017','#20b2ba','#8a8f98'];
+function colorePerCategoriaChart(cat){
+  if(CAT_CHART_COLORS[cat]) return CAT_CHART_COLORS[cat];
+  let hash = 0;
+  for(let i=0;i<cat.length;i++) hash = cat.charCodeAt(i) + ((hash<<5)-hash);
+  return CUSTOM_CHART_COLORS[Math.abs(hash) % CUSTOM_CHART_COLORS.length];
+}
 
 /* ---------- Supermercati ---------- */
 function ensureDefaultSupermercati(){
@@ -1077,7 +1091,7 @@ const BASE_SECTIONS = [
   {id:'impostazioni', icon:'⚙️', color:'#eceef1', label:'Impostazioni', sub:'Categorie, backup, versione'}
 ];
 
-let state = { route:'home', costiMese: monthKey(), editCostoId:null, editCatId:null, editCatKind:null, catalogoSearch:'', catGestioneSearch:'', editStoricoId:null };
+let state = { route:'home', costiMese: monthKey(), editCostoId:null, editCatId:null, editCatKind:null, catalogoSearch:'', catGestioneSearch:'', editStoricoId:null, storicoMese:null };
 let graficiChartInstances = [];
 let navHistory = [];
 
@@ -1396,6 +1410,11 @@ function pagamentoIcona(p){
   if(p==='Pagamento elettronico') return '💳';
   return '💵';
 }
+function cambiaMeseStorico(delta){
+  const base = state.storicoMese || monthKey();
+  state.storicoMese = addMonths(base, delta);
+  render();
+}
 function renderStoricoSpesa(){
   const storico = lsGet('ss_lista_storico', []).slice().sort((a,b)=> (b.data||'').localeCompare(a.data||''));
   if(storico.length===0){
@@ -1408,21 +1427,39 @@ function renderStoricoSpesa(){
   }
   let html = `<div class="list-spacer"></div>`;
 
-  // Riepilogo: totale del mese corrente e totale complessivo (solo spese con importo registrato)
-  const meseCorrente = monthKey();
-  const conImporto = storico.filter(s=>s.importo!=null);
-  const totMese = storico.filter(s=>(s.data||'').slice(0,7)===meseCorrente && s.importo!=null).reduce((sum,s)=>sum+s.importo, 0);
-  const totComplessivo = conImporto.reduce((sum,s)=>sum+s.importo, 0);
-  const senzaImporto = storico.length - conImporto.length;
+  // Selettore del mese: "Tutti i mesi" oppure un mese specifico, con frecce Prec/Succ
+  const meseAttivo = state.storicoMese; // null = tutti i mesi
+  html += `<div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+    <button class="btn secondary small" onclick="cambiaMeseStorico(-1)">‹ Prec</button>
+    <div style="font-weight:800; font-size:15.5px;">${meseAttivo ? escapeHtml(monthLabel(meseAttivo)) : 'Tutti i mesi'}</div>
+    <button class="btn secondary small" onclick="cambiaMeseStorico(1)">Succ ›</button>
+  </div>
+  <div class="fab-row" style="margin-top:8px;">
+    <button class="btn ${meseAttivo?'secondary':'accent-soft'}" style="flex:1;" onclick="state.storicoMese=null; render();">Tutti i mesi</button>
+    <button class="btn ${meseAttivo?'accent-soft':'secondary'}" style="flex:1;" onclick="state.storicoMese=state.storicoMese||'${monthKey()}'; render();">Un mese specifico</button>
+  </div>`;
+
+  const storicoFiltrato = meseAttivo ? storico.filter(s=>(s.data||'').slice(0,7)===meseAttivo) : storico;
+
+  // Riepilogo: totale del periodo mostrato e totale complessivo (solo spese con importo registrato)
+  const conImporto = storicoFiltrato.filter(s=>s.importo!=null);
+  const totPeriodo = conImporto.reduce((sum,s)=>sum+s.importo, 0);
+  const totComplessivo = storico.filter(s=>s.importo!=null).reduce((sum,s)=>sum+s.importo, 0);
+  const senzaImporto = storicoFiltrato.length - conImporto.length;
   html += `<div class="card">
     <div class="row" style="justify-content:space-between; align-items:center; margin-top:0;">
-      <div><div class="s" style="margin:0;">Totale ${escapeHtml(monthLabel(meseCorrente))}</div><div style="font-weight:800; font-size:20px;">${euro(totMese)}</div></div>
+      <div><div class="s" style="margin:0;">Totale ${meseAttivo ? escapeHtml(monthLabel(meseAttivo)) : 'mostrato'}</div><div style="font-weight:800; font-size:20px;">${euro(totPeriodo)}</div></div>
       <div style="text-align:right;"><div class="s" style="margin:0;">Totale complessivo</div><div style="font-weight:800; font-size:20px;">${euro(totComplessivo)}</div></div>
     </div>
     ${senzaImporto>0 ? `<div class="body" style="margin-top:10px;">${senzaImporto} spes${senzaImporto===1?'a':'e'} senza importo registrato, non ${senzaImporto===1?'conteggiata':'conteggiate'} qui sopra.</div>` : ''}
   </div>`;
 
-  storico.forEach(s=>{
+  if(storicoFiltrato.length===0){
+    html += `<div class="empty">Nessuna spesa in ${escapeHtml(monthLabel(meseAttivo))}.</div>`;
+    return html;
+  }
+
+  storicoFiltrato.forEach(s=>{
     const importoTxt = s.importo!=null ? euro(s.importo) : '—';
     const dettPezzi = [];
     if(s.autore) dettPezzi.push(`👤 ${escapeHtml(s.autore)}`);
@@ -2240,6 +2277,9 @@ async function delCosto(id){
 /* ---------- GRAFICI ---------- */
 function getGraficiPeriodo(){ try{ return localStorage.getItem('ss_grafici_periodo') || '6m'; }catch(e){ return '6m'; } }
 function setGraficiPeriodo(v){ try{ localStorage.setItem('ss_grafici_periodo', v); }catch(e){} render(); }
+function getGraficiMeseSingolo(){ try{ return localStorage.getItem('ss_grafici_mese_singolo') || monthKey(); }catch(e){ return monthKey(); } }
+function setGraficiMeseSingolo(mk){ try{ localStorage.setItem('ss_grafici_mese_singolo', mk); }catch(e){} render(); }
+function cambiaMeseGraficiSingolo(delta){ setGraficiMeseSingolo(addMonths(getGraficiMeseSingolo(), delta)); }
 
 function renderGrafici(){
   const periodo = getGraficiPeriodo();
@@ -2248,7 +2288,13 @@ function renderGrafici(){
       <button class="period-btn ${periodo==='3m'?'active':''}" onclick="setGraficiPeriodo('3m')">Ultimi 3 mesi</button>
       <button class="period-btn ${periodo==='6m'?'active':''}" onclick="setGraficiPeriodo('6m')">Ultimi 6 mesi</button>
       <button class="period-btn ${periodo==='12m'?'active':''}" onclick="setGraficiPeriodo('12m')">Ultimo anno</button>
+      <button class="period-btn ${periodo==='singolo'?'active':''}" onclick="setGraficiPeriodo('singolo')">Un mese</button>
     </div>
+    ${periodo==='singolo' ? `<div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:10px;">
+      <button class="btn secondary small" onclick="cambiaMeseGraficiSingolo(-1)">‹ Prec</button>
+      <div style="font-weight:800; font-size:15.5px;">${escapeHtml(monthLabel(getGraficiMeseSingolo()))}</div>
+      <button class="btn secondary small" onclick="cambiaMeseGraficiSingolo(1)">Succ ›</button>
+    </div>` : ''}
     <div class="chart-title">Andamento mensile: spesa al supermercato</div>
     <div class="card"><div class="chart-wrap"><canvas id="chartAndamento"></canvas></div></div>
     <div class="chart-title">🏬 Riepilogo per supermercato (periodo selezionato)</div>
@@ -2266,10 +2312,15 @@ function drawGrafici(){
   if(typeof Chart === 'undefined') return;
 
   const periodo = getGraficiPeriodo();
-  const n = nMonthsFromPeriodo(periodo);
   const nowMk = monthKey();
-  const months = [];
-  for(let i=n-1;i>=0;i--) months.push(addMonths(nowMk, -i));
+  let months;
+  if(periodo === 'singolo'){
+    months = [getGraficiMeseSingolo()];
+  } else {
+    const n = nMonthsFromPeriodo(periodo);
+    months = [];
+    for(let i=n-1;i>=0;i--) months.push(addMonths(nowMk, -i));
+  }
 
   const storico = lsGet('ss_lista_storico', []);
 
@@ -2323,7 +2374,7 @@ function drawGrafici(){
         type:'pie',
         data:{
           labels:prodCatLabels,
-          datasets:[{ data:prodCatLabels.map(l=>prodCatTotals[l]), backgroundColor:prodCatLabels.map(l=>colorePerCategoria(l)==='#eceef1'?'#c9ccd1':colorePerCategoria(l).replace('#f','#e')) }]
+          datasets:[{ data:prodCatLabels.map(l=>prodCatTotals[l]), backgroundColor:prodCatLabels.map(colorePerCategoriaChart) }]
         },
         options:{
           responsive:true, maintainAspectRatio:false,
