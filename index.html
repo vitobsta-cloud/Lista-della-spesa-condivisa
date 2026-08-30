@@ -317,8 +317,9 @@
 /* =========================================================
    Spesa & Costi — app locale, offline-first (localStorage)
    ========================================================= */
-const APP_VERSION = 'v5.3';
+const APP_VERSION = 'v5.4';
 const CHANGELOG = [
+  {v:'v5.4', note:'Nei Grafici, due modalità chiare invece di una vista unica: "Per mese" (un solo selettore, semplice) o "Per periodo" (Da/A, per un intervallo). Si sceglie con due pulsanti in alto.'},
   {v:'v5.3', note:'Tolti i pulsanti "Ultimi 3/6/12 mesi" nei Grafici (creavano confusione insieme al resto): ora c\'è solo un intervallo "Da [mese] a [mese]" con le frecce Prec/Succ, puoi scegliere esattamente il periodo o anche un singolo mese (impostando Da e A uguali).'},
   {v:'v5.2', note:'Nello Storico spese ora puoi filtrare per mese specifico (con frecce Prec/Succ) oltre a vedere tutto. Sistemati i colori sbiaditi del grafico a torta "Prodotti per categoria", ora più vivaci.'},
   {v:'v5.1', note:'Tolta la sezione "Costi mensili" (bollette): questa app serve solo per la spesa al supermercato. Nei Grafici, al posto dei costi fissi trovi ora un "🏬 Riepilogo per supermercato" con il totale speso in ciascuno, oltre ai grafici sui prodotti già presenti. Aggiunto anche un totale (mese corrente + complessivo) in cima alla Cronologia spese.'},
@@ -2276,16 +2277,31 @@ async function delCosto(id){
 }
 
 /* ---------- GRAFICI ---------- */
+function getGraficiModo(){ try{ return localStorage.getItem('ss_grafici_modo') || 'mese'; }catch(e){ return 'mese'; } }
+function setGraficiModo(v){ try{ localStorage.setItem('ss_grafici_modo', v); }catch(e){} render(); }
 function getGraficiDa(){ try{ return localStorage.getItem('ss_grafici_da') || addMonths(monthKey(), -2); }catch(e){ return addMonths(monthKey(), -2); } }
 function getGraficiA(){ try{ return localStorage.getItem('ss_grafici_a') || monthKey(); }catch(e){ return monthKey(); } }
 function setGraficiDa(mk){ try{ localStorage.setItem('ss_grafici_da', mk); }catch(e){} render(); }
 function setGraficiA(mk){ try{ localStorage.setItem('ss_grafici_a', mk); }catch(e){} render(); }
 function cambiaGraficiDa(delta){ setGraficiDa(addMonths(getGraficiDa(), delta)); }
 function cambiaGraficiA(delta){ setGraficiA(addMonths(getGraficiA(), delta)); }
+function cambiaGraficiMese(delta){ setGraficiA(addMonths(getGraficiA(), delta)); } // in modalità "un mese" usiamo solo "A"
 
 function renderGrafici(){
-  const da = getGraficiDa(), a = getGraficiA();
+  const modo = getGraficiModo();
+  const a = getGraficiA();
+  const da = getGraficiDa();
   return `
+    <div class="fab-row" style="margin-top:0;">
+      <button class="btn ${modo==='mese'?'accent-soft':'secondary'}" style="flex:1;" onclick="setGraficiModo('mese')">Per mese</button>
+      <button class="btn ${modo==='periodo'?'accent-soft':'secondary'}" style="flex:1;" onclick="setGraficiModo('periodo')">Per periodo</button>
+    </div>
+    ${modo==='mese' ? `
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+      <button class="btn secondary small" onclick="cambiaGraficiMese(-1)">‹ Prec</button>
+      <div style="font-weight:800; font-size:15.5px;">${escapeHtml(monthLabel(a))}</div>
+      <button class="btn secondary small" onclick="cambiaGraficiMese(1)">Succ ›</button>
+    </div>` : `
     <div class="card">
       <div class="s" style="margin:0 0 4px;">Da</div>
       <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
@@ -2299,7 +2315,7 @@ function renderGrafici(){
         <div style="font-weight:800; font-size:15.5px;">${escapeHtml(monthLabel(a))}</div>
         <button class="btn secondary small" onclick="cambiaGraficiA(1)">Succ ›</button>
       </div>
-    </div>
+    </div>`}
     <div class="chart-title">Andamento mensile: spesa al supermercato</div>
     <div class="card"><div class="chart-wrap"><canvas id="chartAndamento"></canvas></div></div>
     <div class="chart-title">🏬 Riepilogo per supermercato (periodo selezionato)</div>
@@ -2315,15 +2331,20 @@ function drawGrafici(){
   graficiChartInstances = [];
   if(typeof Chart === 'undefined') return;
 
-  let da = getGraficiDa(), a = getGraficiA();
-  if(da > a){ const tmp = da; da = a; a = tmp; } // se "Da" è dopo "A", li scambiamo così l'intervallo ha sempre senso
-  const months = [];
-  let cursore = da;
-  let sicurezza = 0;
-  while(cursore <= a && sicurezza < 60){ // limite di sicurezza: max 60 mesi in un colpo solo
-    months.push(cursore);
-    cursore = addMonths(cursore, 1);
-    sicurezza++;
+  let months;
+  if(getGraficiModo()==='mese'){
+    months = [getGraficiA()];
+  } else {
+    let da = getGraficiDa(), a = getGraficiA();
+    if(da > a){ const tmp = da; da = a; a = tmp; } // se "Da" è dopo "A", li scambiamo così l'intervallo ha sempre senso
+    months = [];
+    let cursore = da;
+    let sicurezza = 0;
+    while(cursore <= a && sicurezza < 60){ // limite di sicurezza: max 60 mesi in un colpo solo
+      months.push(cursore);
+      cursore = addMonths(cursore, 1);
+      sicurezza++;
+    }
   }
 
   const storico = lsGet('ss_lista_storico', []);
